@@ -24,6 +24,11 @@ django-health-check==3.17.0
 # HTTP Requests
 requests==2.31.0
 
+# gRPC
+grpcio==1.59.0
+grpcio-tools==1.59.0
+protobuf==4.25.0
+
 # System Monitoring
 psutil==5.9.6
 

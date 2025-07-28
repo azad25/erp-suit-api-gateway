@@ -11,6 +11,9 @@ urlpatterns = [
     path('register/', views.register_proxy, name='register_proxy'),
     path('refresh/', views.refresh_token_proxy, name='refresh_token_proxy'),
     path('validate/', views.validate_token_proxy, name='validate_token_proxy'),
+    path('forgot-password/', views.forgot_password_proxy, name='forgot_password_proxy'),
+    path('reset-password/', views.reset_password_proxy, name='reset_password_proxy'),
+    path('me/', views.current_user_proxy, name='current_user_proxy'),
     
     # User management
     path('users/', views.user_list_proxy, name='user_list_proxy'),

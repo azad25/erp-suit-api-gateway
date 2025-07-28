@@ -33,7 +33,7 @@ class AuthServiceClient:
             return cached_data
             
         try:
-            url = f"{self.base_url}/api/auth/validate"
+            url = f"{self.base_url}/api/v1/auth/validate"
             headers = {
                 'Authorization': f'Bearer {token}',
                 'Content-Type': 'application/json'
@@ -66,7 +66,7 @@ class AuthServiceClient:
         Authenticate user with Auth Service
         """
         try:
-            url = f"{self.base_url}/api/auth/login"
+            url = f"{self.base_url}/api/v1/auth/login"
             data = {
                 'username': username,
                 'password': password
@@ -131,7 +131,7 @@ class AuthServiceClient:
         Check if user has specific permission
         """
         try:
-            url = f"{self.base_url}/api/auth/check-permission"
+            url = f"{self.base_url}/api/v1/auth/check-permission"
             data = {
                 'user_id': user_id,
                 'permission': permission
@@ -197,7 +197,7 @@ class AuthServiceClient:
         Refresh access token
         """
         try:
-            url = f"{self.base_url}/api/auth/refresh"
+            url = f"{self.base_url}/api/v1/auth/refresh"
             data = {
                 'refresh_token': refresh_token
             }

@@ -32,7 +32,7 @@ def login_proxy(request):
         
         # Forward request to auth service
         response = requests.post(
-            f"{settings.AUTH_SERVICE_CONFIG['BASE_URL']}/api/auth/login",
+            f"{settings.AUTH_SERVICE_CONFIG['BASE_URL']}/api/v1/auth/login",
             json=request.data,
             timeout=settings.AUTH_SERVICE_CONFIG['TIMEOUT']
         )
@@ -66,7 +66,7 @@ def logout_proxy(request):
     try:
         # Forward request to auth service
         response = requests.post(
-            f"{settings.AUTH_SERVICE_CONFIG['BASE_URL']}/api/auth/logout",
+            f"{settings.AUTH_SERVICE_CONFIG['BASE_URL']}/api/v1/auth/logout",
             headers={'Authorization': request.META.get('HTTP_AUTHORIZATION', '')},
             timeout=settings.AUTH_SERVICE_CONFIG['TIMEOUT']
         )
@@ -101,7 +101,7 @@ def register_proxy(request):
     try:
         # Forward request to auth service
         response = requests.post(
-            f"{settings.AUTH_SERVICE_CONFIG['BASE_URL']}/api/auth/register",
+            f"{settings.AUTH_SERVICE_CONFIG['BASE_URL']}/api/v1/auth/register",
             json=request.data,
             timeout=settings.AUTH_SERVICE_CONFIG['TIMEOUT']
         )
@@ -204,7 +204,7 @@ def user_list_proxy(request):
     try:
         # Forward request to auth service
         response = requests.get(
-            f"{settings.AUTH_SERVICE_CONFIG['BASE_URL']}/api/users/",
+            f"{settings.AUTH_SERVICE_CONFIG['BASE_URL']}/api/v1/users/",
             headers={'Authorization': request.META.get('HTTP_AUTHORIZATION', '')},
             params=request.GET,
             timeout=settings.AUTH_SERVICE_CONFIG['TIMEOUT']
@@ -293,7 +293,7 @@ def permission_list_proxy(request):
     try:
         # Forward request to auth service
         response = requests.get(
-            f"{settings.AUTH_SERVICE_CONFIG['BASE_URL']}/api/permissions/",
+            f"{settings.AUTH_SERVICE_CONFIG['BASE_URL']}/api/v1/permissions/",
             headers={'Authorization': request.META.get('HTTP_AUTHORIZATION', '')},
             timeout=settings.AUTH_SERVICE_CONFIG['TIMEOUT']
         )
@@ -348,4 +348,108 @@ def check_permission_proxy(request):
         return Response(
             {'error': 'Internal server error'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        ) 
+        )
+
+
+@extend_schema(
+    summary="Forgot Password Proxy",
+    description="Proxy forgot password request to Auth Service",
+    responses={200: dict, 400: dict}
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password_proxy(request):
+    """
+    Proxy forgot password request to Auth Service
+    """
+    try:
+        # Forward request to auth service
+        response = requests.post(
+            f"{settings.AUTH_SERVICE_CONFIG['BASE_URL']}/api/v1/auth/forgot-password",
+            json=request.data,
+            timeout=settings.AUTH_SERVICE_CONFIG['TIMEOUT']
+        )
+        
+        if response.status_code == 200:
+            return Response(response.json(), status=status.HTTP_200_OK)
+        else:
+            return Response(
+                response.json() if response.content else {'error': 'Failed to send reset instructions'},
+                status=response.status_code
+            )
+            
+    except Exception as e:
+        logger.error(f"Forgot password proxy error: {str(e)}")
+        return Response(
+            {'error': 'Internal server error'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    summary="Reset Password Proxy",
+    description="Proxy reset password request to Auth Service",
+    responses={200: dict, 400: dict}
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password_proxy(request):
+    """
+    Proxy reset password request to Auth Service
+    """
+    try:
+        # Forward request to auth service
+        response = requests.post(
+            f"{settings.AUTH_SERVICE_CONFIG['BASE_URL']}/api/v1/auth/reset-password",
+            json=request.data,
+            timeout=settings.AUTH_SERVICE_CONFIG['TIMEOUT']
+        )
+        
+        if response.status_code == 200:
+            return Response(response.json(), status=status.HTTP_200_OK)
+        else:
+            return Response(
+                response.json() if response.content else {'error': 'Failed to reset password'},
+                status=response.status_code
+            )
+            
+    except Exception as e:
+        logger.error(f"Reset password proxy error: {str(e)}")
+        return Response(
+            {'error': 'Internal server error'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    summary="Current User Proxy",
+    description="Proxy current user request to Auth Service",
+    responses={200: dict, 401: dict}
+)
+@api_view(['GET'])
+def current_user_proxy(request):
+    """
+    Proxy current user request to Auth Service
+    """
+    try:
+        # Forward request to auth service
+        response = requests.get(
+            f"{settings.AUTH_SERVICE_CONFIG['BASE_URL']}/api/v1/users/profile",
+            headers={'Authorization': request.META.get('HTTP_AUTHORIZATION', '')},
+            timeout=settings.AUTH_SERVICE_CONFIG['TIMEOUT']
+        )
+        
+        if response.status_code == 200:
+            return Response(response.json(), status=status.HTTP_200_OK)
+        else:
+            return Response(
+                response.json() if response.content else {'error': 'Failed to get user profile'},
+                status=response.status_code
+            )
+            
+    except Exception as e:
+        logger.error(f"Current user proxy error: {str(e)}")
+        return Response(
+            {'error': 'Internal server error'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
