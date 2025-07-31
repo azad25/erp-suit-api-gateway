@@ -30,11 +30,10 @@ RUN if [ -f requirements-dev.txt ]; then pip install --no-cache-dir -r requireme
 # Copy project files
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p /app/logs /app/media /app/static
-
-# Change ownership
-RUN chown -R appuser:appgroup /app
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/logs /app/media /app/static && \
+    chown -R appuser:appgroup /app && \
+    chmod -R 755 /app/logs
 
 # Switch to non-root user
 USER appuser

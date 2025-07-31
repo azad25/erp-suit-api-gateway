@@ -229,6 +229,24 @@ SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
 SESSION_CACHE_ALIAS = 'default'
 
 # Logging Configuration
+# Configure handlers based on environment
+LOGGING_HANDLERS = ['console']
+LOGGING_HANDLERS_CONFIG = {
+    'console': {
+        'class': 'logging.StreamHandler',
+        'formatter': 'verbose',
+    },
+}
+
+# Only add file logging in production
+if not DEBUG:
+    LOGGING_HANDLERS.append('file')
+    LOGGING_HANDLERS_CONFIG['file'] = {
+        'class': 'logging.FileHandler',
+        'filename': os.path.join(BASE_DIR, 'logs', 'django.log'),
+        'formatter': 'verbose',
+    }
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -242,34 +260,24 @@ LOGGING = {
             'style': '{',
         },
     },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
-        },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'django.log'),
-            'formatter': 'verbose',
-        },
-    },
+    'handlers': LOGGING_HANDLERS_CONFIG,
     'root': {
-        'handlers': ['console', 'file'],
+        'handlers': LOGGING_HANDLERS,
         'level': 'INFO',
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': LOGGING_HANDLERS,
             'level': 'INFO',
             'propagate': False,
         },
         'core': {
-            'handlers': ['console', 'file'],
+            'handlers': LOGGING_HANDLERS,
             'level': 'DEBUG',
             'propagate': False,
         },
         'gateway': {
-            'handlers': ['console', 'file'],
+            'handlers': LOGGING_HANDLERS,
             'level': 'DEBUG',
             'propagate': False,
         },
