@@ -2,7 +2,7 @@
 
 A high-performance, enterprise-grade API Gateway built in Go that serves as the central entry point for the ERP system.
 
-## Project Structure
+## Project Structur e
 
 ```
 go-api-gateway/
