@@ -1,1 +1,0 @@
-# Django core application package 

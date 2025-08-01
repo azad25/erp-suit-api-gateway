@@ -1,123 +1,70 @@
-# Django Core API Gateway Makefile
+# Go API Gateway Makefile
 
-.PHONY: help install dev test clean build docker-build docker-run docker-stop migrate makemigrations shell superuser collectstatic lint format
+.PHONY: build run test clean deps fmt lint
 
-# Variables
-PYTHON = python3
-PIP = pip3
-MANAGE = python manage.py
-DOCKER_COMPOSE = docker-compose
+# Build the application
+build:
+	go build -o bin/server cmd/server/main.go
 
-# Default target
-help:
-	@echo "Django Core API Gateway Commands:"
-	@echo ""
-	@echo "Development:"
-	@echo "  install         - Install dependencies"
-	@echo "  dev             - Run development server"
-	@echo "  test            - Run tests"
-	@echo "  clean           - Clean Python cache"
-	@echo ""
-	@echo "Database:"
-	@echo "  migrate         - Run database migrations"
-	@echo "  makemigrations  - Create new migrations"
-	@echo "  shell           - Open Django shell"
-	@echo "  superuser       - Create superuser"
-	@echo ""
-	@echo "Docker:"
-	@echo "  docker-build    - Build Docker image"
-	@echo "  docker-run      - Run with Docker Compose"
-	@echo "  docker-stop     - Stop Docker containers"
-	@echo ""
-	@echo "Utilities:"
-	@echo "  collectstatic   - Collect static files"
-	@echo "  lint            - Run linting"
-	@echo "  format          - Format code"
+# Run the application
+run:
+	go run cmd/server/main.go
 
-# Development Commands
-install:
-	@echo "Installing dependencies..."
-	$(PIP) install -r requirements.txt
-	@echo "✅ Dependencies installed"
-
-dev:
-	@echo "Starting development server..."
-	$(MANAGE) runserver 0.0.0.0:8000
-
+# Run tests
 test:
-	@echo "Running tests..."
-	$(MANAGE) test --verbosity=2
+	go test -v ./...
 
+# Run tests with coverage
+test-coverage:
+	go test -v -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+
+# Clean build artifacts
 clean:
-	@echo "Cleaning Python cache..."
-	find . -type f -name "*.pyc" -delete
-	find . -type d -name "__pycache__" -delete
-	find . -type d -name "*.egg-info" -exec rm -rf {} +
-	@echo "✅ Cleaned"
+	rm -rf bin/
+	rm -f coverage.out coverage.html
 
-# Database Commands
-migrate:
-	@echo "Running migrations..."
-	$(MANAGE) migrate
+# Download dependencies
+deps:
+	go mod download
+	go mod tidy
 
-makemigrations:
-	@echo "Creating migrations..."
-	$(MANAGE) makemigrations
+# Format code
+fmt:
+	go fmt ./...
 
-shell:
-	@echo "Opening Django shell..."
-	$(MANAGE) shell
-
-superuser:
-	@echo "Creating superuser..."
-	$(MANAGE) createsuperuser
-
-# Docker Commands
-docker-build:
-	@echo "Building Docker image..."
-	$(DOCKER_COMPOSE) build
-
-docker-run:
-	@echo "Starting Docker containers..."
-	$(DOCKER_COMPOSE) up -d
-
-docker-stop:
-	@echo "Stopping Docker containers..."
-	$(DOCKER_COMPOSE) down
-
-# Utility Commands
-collectstatic:
-	@echo "Collecting static files..."
-	$(MANAGE) collectstatic --noinput
-
+# Run linter
 lint:
-	@echo "Running linting..."
-	flake8 .
-	black --check .
-	isort --check-only .
+	golangci-lint run
 
-format:
-	@echo "Formatting code..."
-	black .
-	isort .
+# Install development tools
+install-tools:
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
-# Setup Commands
-setup: install migrate collectstatic
-	@echo "✅ Setup complete"
+# Run the server with hot reload (requires air)
+dev:
+	air
 
-setup-dev: install migrate collectstatic superuser
-	@echo "✅ Development setup complete"
+# Build Docker image
+docker-build:
+	docker build -t go-api-gateway:latest .
 
-# Health Check
-health:
-	@echo "Checking service health..."
-	curl -f http://localhost:8000/health/ || echo "❌ Service not healthy"
+# Run with Docker Compose
+docker-up:
+	docker-compose up -d
 
-# Logs
+# Stop Docker Compose
+docker-down:
+	docker-compose down
+
+# View logs
 logs:
-	@echo "Showing logs..."
-	$(DOCKER_COMPOSE) logs -f
+	docker-compose logs -f go-api-gateway
 
-# Reset
-reset: docker-stop clean
-	@echo "✅ Reset complete" 
+# Health check
+health:
+	curl -f http://localhost:8080/health || exit 1
+
+# Ready check
+ready:
+	curl -f http://localhost:8080/ready || exit 1

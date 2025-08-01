@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package finance;
+
+option go_package = "erp-api-gateway/proto/gen/finance";
+
+import "google/protobuf/timestamp.proto";
+
+// FinanceService defines the Finance service
+service FinanceService {
+  rpc GetTransactions(GetTransactionsRequest) returns (GetTransactionsResponse);
+  rpc GetTransaction(GetTransactionRequest) returns (GetTransactionResponse);
+  rpc CreateTransaction(CreateTransactionRequest) returns (CreateTransactionResponse);
+  rpc UpdateTransaction(UpdateTransactionRequest) returns (UpdateTransactionResponse);
+  rpc DeleteTransaction(DeleteTransactionRequest) returns (DeleteTransactionResponse);
+}
+
+// Get transactions request and response
+message GetTransactionsRequest {
+  int32 page = 1;
+  int32 limit = 2;
+  string search = 3;
+  string type = 4;
+}
+
+message GetTransactionsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated Transaction data = 3;
+  PaginationMeta meta = 4;
+  map<string, FieldErrors> errors = 5;
+}
+
+// Get transaction request and response
+message GetTransactionRequest {
+  string transaction_id = 1;
+}
+
+message GetTransactionResponse {
+  bool success = 1;
+  string message = 2;
+  Transaction data = 3;
+  map<string, FieldErrors> errors = 4;
+}
+
+// Create transaction request and response
+message CreateTransactionRequest {
+  string description = 1;
+  double amount = 2;
+  string type = 3;
+  string category = 4;
+}
+
+message CreateTransactionResponse {
+  bool success = 1;
+  string message = 2;
+  Transaction data = 3;
+  map<string, FieldErrors> errors = 4;
+}
+
+// Update transaction request and response
+message UpdateTransactionRequest {
+  string transaction_id = 1;
+  string description = 2;
+  double amount = 3;
+  string type = 4;
+  string category = 5;
+}
+
+message UpdateTransactionResponse {
+  bool success = 1;
+  string message = 2;
+  Transaction data = 3;
+  map<string, FieldErrors> errors = 4;
+}
+
+// Delete transaction request and response
+message DeleteTransactionRequest {
+  string transaction_id = 1;
+}
+
+message DeleteTransactionResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Data structures
+message Transaction {
+  string id = 1;
+  string description = 2;
+  double amount = 3;
+  string type = 4;
+  string category = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message PaginationMeta {
+  int32 current_page = 1;
+  int32 per_page = 2;
+  int32 total = 3;
+  int32 last_page = 4;
+}
+
+message FieldErrors {
+  repeated string errors = 1;
+}

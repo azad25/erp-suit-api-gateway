@@ -1,0 +1,24 @@
+"""
+Root Mutation type
+"""
+type Mutation {
+  """
+  User login
+  """
+  login(input: LoginInput!): AuthResponse!
+
+  """
+  User registration
+  """
+  register(input: RegisterInput!): AuthResponse!
+
+  """
+  User logout
+  """
+  logout: MutationResponse!
+
+  """
+  Refresh access token
+  """
+  refreshToken(refreshToken: String!): AuthResponse!
+}
