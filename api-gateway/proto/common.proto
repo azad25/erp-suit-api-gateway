@@ -1,9 +1,0 @@
-syntax = "proto3";
-
-package commonpb;
-
-option go_package = "erp-api-gateway/proto/common";
-
-message FieldErrors {
-  repeated string errors = 1;
-}
