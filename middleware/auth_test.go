@@ -514,3 +514,234 @@ func TestHelperFunctions_NoAuth(t *testing.T) {
 		assert.False(t, HasPermission(c, "read"))
 	})
 }
+
+func TestAuthMiddleware_RequireAuth(t *testing.T) {
+	mockValidator := new(MockJWTValidator)
+	mockCache := new(MockCacheService)
+	middleware := NewAuthMiddleware(mockValidator, mockCache)
+
+	t.Run("ValidTokenAndClaims", func(t *testing.T) {
+		// Setup
+		router := setupTestRouter()
+		claims := createTestClaims()
+		token := "valid-token"
+
+		mockValidator.On("ValidateToken", token).Return(claims, nil)
+		mockCache.On("Set", mock.Anything, mock.AnythingOfType("string"), mock.Anything, mock.Anything).Return(nil)
+
+		router.GET("/test", middleware.RequireAuth(), func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"message": "success"})
+		})
+
+		// Test
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Assert
+		assert.Equal(t, http.StatusOK, w.Code)
+		mockValidator.AssertExpectations(t)
+	})
+
+	t.Run("InvalidToken", func(t *testing.T) {
+		// Setup
+		router := setupTestRouter()
+		token := "invalid-token"
+		
+		mockValidator.On("ValidateToken", token).Return(nil, fmt.Errorf("token validation failed"))
+
+		router.GET("/test", middleware.RequireAuth(), func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"message": "success"})
+		})
+
+		// Test
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Assert
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		mockValidator.AssertExpectations(t)
+	})
+}
+
+func TestAuthMiddleware_ExtractClaims_InvalidClaims(t *testing.T) {
+	mockValidator := new(MockJWTValidator)
+	mockCache := new(MockCacheService)
+	middleware := NewAuthMiddleware(mockValidator, mockCache)
+
+	t.Run("InvalidClaimsType", func(t *testing.T) {
+		// Setup
+		router := setupTestRouter()
+		router.GET("/test", func(c *gin.Context) {
+			// Set invalid claims type
+			c.Set(UserClaimsKey, "invalid-claims-type")
+		}, middleware.ExtractClaims(), func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"message": "success"})
+		})
+
+		// Test
+		req := httptest.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Assert
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Equal(t, false, response["success"])
+		assert.Equal(t, "Invalid user claims", response["message"])
+	})
+}
+
+func TestAuthMiddleware_CacheUserClaims(t *testing.T) {
+	mockValidator := new(MockJWTValidator)
+	mockCache := new(MockCacheService)
+	middleware := NewAuthMiddleware(mockValidator, mockCache)
+
+	t.Run("CacheWithNilCache", func(t *testing.T) {
+		// Test with nil cache
+		middlewareNilCache := NewAuthMiddleware(mockValidator, nil)
+		claims := createTestClaims()
+		
+		// This should not panic
+		middlewareNilCache.cacheUserClaims(claims)
+	})
+
+	t.Run("CacheWithExpiredToken", func(t *testing.T) {
+		// Test with expired token
+		claims := createTestClaims()
+		claims.ExpiresAt = time.Now().Add(-time.Hour).Unix() // Expired
+		
+		// This should not cache anything
+		middleware.cacheUserClaims(claims)
+	})
+
+	t.Run("CacheWithValidToken", func(t *testing.T) {
+		// Test with valid token
+		claims := createTestClaims()
+		
+		// Mock cache set operation
+		mockCache.On("Set", mock.Anything, mock.AnythingOfType("string"), mock.Anything, mock.AnythingOfType("time.Duration")).Return(nil)
+		
+		middleware.cacheUserClaims(claims)
+		
+		// Give goroutine time to execute
+		time.Sleep(10 * time.Millisecond)
+		
+		mockCache.AssertExpectations(t)
+	})
+}
+
+func TestHelperFunctions_EdgeCases(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	t.Run("GetUserRoles_NoRoles", func(t *testing.T) {
+		roles, exists := GetUserRoles(c)
+		assert.False(t, exists)
+		assert.Nil(t, roles)
+	})
+
+	t.Run("GetUserPermissions_NoPermissions", func(t *testing.T) {
+		permissions, exists := GetUserPermissions(c)
+		assert.False(t, exists)
+		assert.Nil(t, permissions)
+	})
+
+	t.Run("GetUserRoles_InvalidType", func(t *testing.T) {
+		c.Set(UserRolesKey, "invalid-type")
+		roles, exists := GetUserRoles(c)
+		assert.False(t, exists)
+		assert.Nil(t, roles)
+	})
+
+	t.Run("GetUserPermissions_InvalidType", func(t *testing.T) {
+		c.Set(UserPermsKey, "invalid-type")
+		permissions, exists := GetUserPermissions(c)
+		assert.False(t, exists)
+		assert.Nil(t, permissions)
+	})
+
+	t.Run("GetUserID_InvalidType", func(t *testing.T) {
+		c.Set(UserIDKey, 123) // Invalid type
+		userID, exists := GetUserID(c)
+		assert.False(t, exists)
+		assert.Empty(t, userID)
+	})
+
+	t.Run("GetUserClaims_InvalidType", func(t *testing.T) {
+		c.Set(UserClaimsKey, "invalid-type")
+		claims, exists := GetUserClaims(c)
+		assert.False(t, exists)
+		assert.Nil(t, claims)
+	})
+}
+
+func TestHelperFunctions_EmptyArrays(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	// Set empty arrays
+	c.Set(UserRolesKey, []string{})
+	c.Set(UserPermsKey, []string{})
+
+	t.Run("HasAnyRole_EmptyRoles", func(t *testing.T) {
+		assert.False(t, HasAnyRole(c, "user", "admin"))
+	})
+
+	t.Run("HasAnyPermission_EmptyPermissions", func(t *testing.T) {
+		assert.False(t, HasAnyPermission(c, "read", "write"))
+	})
+
+	t.Run("HasAllRoles_EmptyRoles", func(t *testing.T) {
+		assert.True(t, HasAllRoles(c)) // Empty array should return true for empty check
+	})
+
+	t.Run("HasAllPermissions_EmptyPermissions", func(t *testing.T) {
+		assert.True(t, HasAllPermissions(c)) // Empty array should return true for empty check
+	})
+}
+
+func TestAuthMiddleware_OptionalJWT_EdgeCases(t *testing.T) {
+	mockValidator := new(MockJWTValidator)
+
+	t.Run("OptionalJWT_WithCacheNil", func(t *testing.T) {
+		// Setup middleware with nil cache
+		middlewareNilCache := NewAuthMiddleware(mockValidator, nil)
+		router := setupTestRouter()
+		claims := createTestClaims()
+		token := "valid-token"
+
+		mockValidator.On("ValidateToken", token).Return(claims, nil)
+
+		router.GET("/test", middlewareNilCache.OptionalJWT(), func(c *gin.Context) {
+			userID, exists := GetUserID(c)
+			if exists {
+				c.JSON(http.StatusOK, gin.H{"user_id": userID})
+			} else {
+				c.JSON(http.StatusOK, gin.H{"message": "anonymous"})
+			}
+		})
+
+		// Test
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Assert
+		assert.Equal(t, http.StatusOK, w.Code)
+		
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Equal(t, "test-user-id", response["user_id"])
+
+		mockValidator.AssertExpectations(t)
+	})
+}

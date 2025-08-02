@@ -6,20 +6,48 @@ import (
 	"net/http"
 	"time"
 
-	"erp-api-gateway/internal/config"
-
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/time/rate"
+
+	"erp-api-gateway/api/graphql"
+	"erp-api-gateway/api/rest"
+	"erp-api-gateway/api/ws"
+	"erp-api-gateway/internal/config"
+	"erp-api-gateway/internal/interfaces"
+	"erp-api-gateway/internal/logging"
+	"erp-api-gateway/internal/services"
+	"erp-api-gateway/internal/services/grpc_client"
+	"erp-api-gateway/middleware"
 )
 
 // Server represents the HTTP server
 type Server struct {
-	config     *config.Config
-	router     *gin.Engine
-	httpServer *http.Server
+	config         *config.Config
+	router         *gin.Engine
+	httpServer     *http.Server
+	logger         interfaces.Logger
+	grpcClient     *grpc_client.GRPCClient
+	redisClient    *services.RedisClient
+	kafkaProducer  *services.KafkaProducer
+	jwtValidator   interfaces.JWTValidator
+	policyEngine   interfaces.PolicyEngine
+	wsHandler      *ws.Handler
+	graphqlHandler *graphql.GraphQLHandler
+}
+
+// Dependencies holds all the dependencies needed by the server
+type Dependencies struct {
+	Logger        interfaces.Logger
+	GRPCClient    *grpc_client.GRPCClient
+	RedisClient   *services.RedisClient
+	KafkaProducer *services.KafkaProducer
+	JWTValidator  interfaces.JWTValidator
+	PolicyEngine  interfaces.PolicyEngine
 }
 
 // New creates a new server instance
-func New(cfg *config.Config) *Server {
+func New(cfg *config.Config, deps *Dependencies) *Server {
 	// Set Gin mode based on environment
 	if cfg.Logging.Level == "debug" {
 		gin.SetMode(gin.DebugMode)
@@ -27,11 +55,40 @@ func New(cfg *config.Config) *Server {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	// Create router without default middleware
 	router := gin.New()
 	
+	// Create WebSocket handler (only if Redis client is available)
+	var wsHandler *ws.Handler
+	if deps.RedisClient != nil {
+		wsHandler = ws.NewHandler(
+			&cfg.WebSocket,
+			deps.RedisClient,
+			logging.NewSimpleLogger(deps.Logger),
+			deps.JWTValidator,
+		)
+	}
+	
+	// Create GraphQL handler
+	graphqlHandler := graphql.NewGraphQLHandler(
+		cfg,
+		logging.NewNoOpLogger(),
+		deps.GRPCClient,
+		deps.RedisClient,
+		deps.KafkaProducer,
+	)
+	
 	server := &Server{
-		config: cfg,
-		router: router,
+		config:         cfg,
+		router:         router,
+		logger:         deps.Logger,
+		grpcClient:     deps.GRPCClient,
+		redisClient:    deps.RedisClient,
+		kafkaProducer:  deps.KafkaProducer,
+		jwtValidator:   deps.JWTValidator,
+		policyEngine:   deps.PolicyEngine,
+		wsHandler:      wsHandler,
+		graphqlHandler: graphqlHandler,
 		httpServer: &http.Server{
 			Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
 			Handler:      router,
@@ -40,6 +97,7 @@ func New(cfg *config.Config) *Server {
 		},
 	}
 
+	server.setupMiddleware()
 	server.setupRoutes()
 	
 	return server
@@ -58,72 +116,384 @@ func (s *Server) Start() error {
 
 // Shutdown gracefully shuts down the server
 func (s *Server) Shutdown(ctx context.Context) error {
+	fmt.Println("Shutting down server...")
+	
+	// Close WebSocket handler
+	if s.wsHandler != nil {
+		if err := s.wsHandler.Close(); err != nil {
+			fmt.Printf("Error closing WebSocket handler: %v\n", err)
+		}
+	}
+	
+	// Shutdown HTTP server with timeout
 	shutdownCtx, cancel := context.WithTimeout(ctx, s.config.Server.ShutdownTimeout)
 	defer cancel()
 	
 	return s.httpServer.Shutdown(shutdownCtx)
 }
 
+// setupMiddleware sets up the middleware chain
+func (s *Server) setupMiddleware() {
+	// Create middleware instances
+	loggingMiddleware := middleware.NewLoggingMiddleware(s.logger)
+	authMiddleware := middleware.NewAuthMiddleware(s.jwtValidator, s.redisClient)
+	rbacMiddleware := middleware.NewRBACMiddleware(s.policyEngine, nil)
+	
+	// Recovery middleware (must be first)
+	s.router.Use(loggingMiddleware.PanicRecovery())
+	
+	// Request logging middleware
+	s.router.Use(loggingMiddleware.RequestLogger())
+	
+	// CORS middleware
+	s.router.Use(s.setupCORS())
+	
+	// Rate limiting middleware
+	s.router.Use(s.setupRateLimit())
+	
+	// Request timeout middleware
+	s.router.Use(s.setupRequestTimeout())
+	
+	// Error logging middleware (should be last)
+	s.router.Use(loggingMiddleware.ErrorLogger())
+	
+	// Store middleware instances for use in route setup
+	s.router.Use(func(c *gin.Context) {
+		c.Set("auth_middleware", authMiddleware)
+		c.Set("rbac_middleware", rbacMiddleware)
+		c.Next()
+	})
+}
+
+// setupCORS sets up CORS middleware
+func (s *Server) setupCORS() gin.HandlerFunc {
+	corsConfig := cors.Config{
+		AllowOrigins:     s.config.Server.CORS.AllowedOrigins,
+		AllowMethods:     s.config.Server.CORS.AllowedMethods,
+		AllowHeaders:     s.config.Server.CORS.AllowedHeaders,
+		AllowCredentials: s.config.Server.CORS.AllowCredentials,
+		MaxAge:           time.Duration(s.config.Server.CORS.MaxAge) * time.Second,
+	}
+	
+	return cors.New(corsConfig)
+}
+
+// setupRateLimit sets up rate limiting middleware
+func (s *Server) setupRateLimit() gin.HandlerFunc {
+	// Create a rate limiter (100 requests per minute per IP)
+	limiter := rate.NewLimiter(rate.Every(time.Minute/100), 100)
+	
+	return func(c *gin.Context) {
+		if !limiter.Allow() {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"success": false,
+				"message": "Rate limit exceeded",
+				"errors":  map[string][]string{"rate_limit": {"Too many requests"}},
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+// setupRequestTimeout sets up request timeout middleware
+func (s *Server) setupRequestTimeout() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Set a timeout for the request context
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+		defer cancel()
+		
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	}
+}
+
 // setupRoutes sets up the HTTP routes
 func (s *Server) setupRoutes() {
-	// Health check endpoints
+	// Health check endpoints (no authentication required)
 	s.router.GET("/health", s.healthCheck)
 	s.router.GET("/ready", s.readinessCheck)
 	
-	// Metrics endpoint (will be implemented later)
+	// Metrics endpoint (no authentication required)
 	s.router.GET("/metrics", s.metricsHandler)
 	
-	// API routes (will be implemented in later tasks)
-	api := s.router.Group("/api/v1")
-	{
-		// Auth routes
-		auth := api.Group("/auth")
-		{
-			auth.POST("/login", s.placeholderHandler("login"))
-			auth.POST("/register", s.placeholderHandler("register"))
-			auth.POST("/logout", s.placeholderHandler("logout"))
-			auth.POST("/refresh", s.placeholderHandler("refresh"))
-			auth.GET("/me", s.placeholderHandler("me"))
-		}
+	// WebSocket endpoint (authentication handled in WebSocket handler)
+	s.router.GET("/ws", s.handleWebSocket)
+	
+	// GraphQL endpoints
+	s.setupGraphQLRoutes()
+	
+	// REST API routes
+	s.setupRESTRoutes()
+}
+
+// setupGraphQLRoutes sets up GraphQL routes
+func (s *Server) setupGraphQLRoutes() {
+	// GraphQL endpoint with optional authentication
+	s.router.POST("/graphql", s.optionalAuth(), s.graphqlHandler.ServeHTTP())
+	
+	// GraphQL Playground (development only)
+	if s.config.IsDevelopment() {
+		s.router.GET("/graphql", s.graphqlHandler.PlaygroundHandler())
+	}
+}
+
+// setupRESTRoutes sets up REST API routes
+func (s *Server) setupRESTRoutes() {
+	// Create router config for REST handlers
+	routerConfig := &rest.RouterConfig{
+		GRPCClient:     s.grpcClient,
+		CacheService:   s.redisClient,
+		EventPublisher: s.kafkaProducer,
+		Logger:         logging.NewSimpleLogger(s.logger),
 	}
 	
-	// GraphQL endpoint (will be implemented later)
-	s.router.POST("/graphql", s.placeholderHandler("graphql"))
-	s.router.GET("/graphql", s.placeholderHandler("graphql-playground"))
+	// Authentication routes (no auth required for login/register)
+	authGroup := s.router.Group("/auth")
+	{
+		// Public routes
+		authGroup.POST("/login/", s.getRESTAuthHandler(routerConfig).Login)
+		authGroup.POST("/register/", s.getRESTAuthHandler(routerConfig).Register)
+		authGroup.POST("/refresh/", s.getRESTAuthHandler(routerConfig).RefreshToken)
+		
+		// Protected routes
+		authGroup.POST("/logout/", s.requireAuth(), s.getRESTAuthHandler(routerConfig).Logout)
+		authGroup.GET("/me/", s.requireAuth(), s.getRESTAuthHandler(routerConfig).GetCurrentUser)
+	}
 	
-	// WebSocket endpoint (will be implemented later)
-	s.router.GET("/ws", s.placeholderHandler("websocket"))
+	// API v1 routes
+	v1 := s.router.Group("/api/v1")
+	{
+		// Authentication routes (alternative paths)
+		authV1 := v1.Group("/auth")
+		{
+			// Public routes
+			authV1.POST("/login/", s.getRESTAuthHandler(routerConfig).Login)
+			authV1.POST("/register/", s.getRESTAuthHandler(routerConfig).Register)
+			authV1.POST("/refresh/", s.getRESTAuthHandler(routerConfig).RefreshToken)
+			
+			// Protected routes
+			authV1.POST("/logout/", s.requireAuth(), s.getRESTAuthHandler(routerConfig).Logout)
+			authV1.GET("/me/", s.requireAuth(), s.getRESTAuthHandler(routerConfig).GetCurrentUser)
+		}
+		
+		// Future API routes will be added here
+		// e.g., CRM, HRM, Finance routes
+	}
+}
+
+// getRESTAuthHandler creates and returns a REST auth handler
+func (s *Server) getRESTAuthHandler(config *rest.RouterConfig) *rest.AuthHandler {
+	return rest.NewAuthHandler(
+		config.GRPCClient,
+		config.CacheService,
+		config.EventPublisher,
+		config.Logger,
+	)
+}
+
+// Middleware helper functions
+
+// requireAuth returns middleware that requires authentication
+func (s *Server) requireAuth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authMiddleware, exists := c.Get("auth_middleware")
+		if !exists {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Authentication middleware not available",
+			})
+			c.Abort()
+			return
+		}
+		
+		authMW := authMiddleware.(*middleware.AuthMiddleware)
+		authMW.RequireAuth()(c)
+	}
+}
+
+// optionalAuth returns middleware that optionally validates authentication
+func (s *Server) optionalAuth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authMiddleware, exists := c.Get("auth_middleware")
+		if !exists {
+			c.Next()
+			return
+		}
+		
+		authMW := authMiddleware.(*middleware.AuthMiddleware)
+		authMW.OptionalJWT()(c)
+	}
+}
+
+// requirePermission returns middleware that requires a specific permission
+func (s *Server) requirePermission(permission string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// First require authentication
+		s.requireAuth()(c)
+		if c.IsAborted() {
+			return
+		}
+		
+		// Then check permission
+		rbacMiddleware, exists := c.Get("rbac_middleware")
+		if !exists {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "RBAC middleware not available",
+			})
+			c.Abort()
+			return
+		}
+		
+		rbacMW := rbacMiddleware.(*middleware.RBACMiddleware)
+		rbacMW.RequirePermission(permission)(c)
+	}
+}
+
+// requireRole returns middleware that requires a specific role
+func (s *Server) requireRole(role string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// First require authentication
+		s.requireAuth()(c)
+		if c.IsAborted() {
+			return
+		}
+		
+		// Then check role
+		rbacMiddleware, exists := c.Get("rbac_middleware")
+		if !exists {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "RBAC middleware not available",
+			})
+			c.Abort()
+			return
+		}
+		
+		rbacMW := rbacMiddleware.(*middleware.RBACMiddleware)
+		rbacMW.RequireRole(role)(c)
+	}
+}
+
+// Route handlers
+
+// handleWebSocket handles WebSocket connection upgrades
+func (s *Server) handleWebSocket(c *gin.Context) {
+	if s.wsHandler == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"message": "WebSocket service not available",
+			"errors":  map[string][]string{"websocket": {"WebSocket handler not initialized"}},
+		})
+		return
+	}
+	
+	if err := s.wsHandler.HandleConnection(c.Writer, c.Request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "WebSocket connection failed",
+			"errors":  map[string][]string{"websocket": {err.Error()}},
+		})
+	}
 }
 
 // healthCheck handles health check requests
 func (s *Server) healthCheck(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status": "healthy",
+	// Basic health check
+	health := gin.H{
+		"status":    "healthy",
 		"timestamp": time.Now().Unix(),
-	})
+		"service":   "erp-api-gateway",
+		"version":   "1.0.0",
+	}
+	
+	c.JSON(http.StatusOK, health)
 }
 
 // readinessCheck handles readiness check requests
 func (s *Server) readinessCheck(c *gin.Context) {
-	// TODO: Check dependencies (Redis, Kafka, gRPC services)
-	c.JSON(http.StatusOK, gin.H{
-		"status": "ready",
+	ctx := c.Request.Context()
+	ready := true
+	checks := make(map[string]string)
+	
+	// Check Redis connection
+	if s.redisClient != nil {
+		if err := s.redisClient.Ping(ctx); err != nil {
+			ready = false
+			checks["redis"] = "unhealthy: " + err.Error()
+		} else {
+			checks["redis"] = "healthy"
+		}
+	}
+	
+	// Check gRPC services
+	if s.grpcClient != nil {
+		// Check Auth Service
+		if authClient, err := s.grpcClient.AuthService(ctx); err != nil {
+			ready = false
+			checks["auth_service"] = "unhealthy: " + err.Error()
+		} else if authClient != nil {
+			checks["auth_service"] = "healthy"
+		}
+	}
+	
+	// Check Kafka producer
+	if s.kafkaProducer != nil {
+		if err := s.kafkaProducer.HealthCheck(ctx); err != nil {
+			ready = false
+			checks["kafka"] = "unhealthy: " + err.Error()
+		} else {
+			checks["kafka"] = "healthy"
+		}
+	} else {
+		checks["kafka"] = "not_configured"
+	}
+	
+	status := "ready"
+	statusCode := http.StatusOK
+	if !ready {
+		status = "not_ready"
+		statusCode = http.StatusServiceUnavailable
+	}
+	
+	response := gin.H{
+		"status":    status,
 		"timestamp": time.Now().Unix(),
-	})
+		"checks":    checks,
+		"service":   "erp-api-gateway",
+		"version":   "1.0.0",
+	}
+	
+	c.JSON(statusCode, response)
 }
 
 // metricsHandler handles Prometheus metrics requests
 func (s *Server) metricsHandler(c *gin.Context) {
-	// TODO: Implement Prometheus metrics
-	c.String(http.StatusOK, "# Metrics endpoint - to be implemented")
+	// Basic metrics - will be enhanced in task 13
+	metrics := fmt.Sprintf(`# HELP http_requests_total Total number of HTTP requests
+# TYPE http_requests_total counter
+http_requests_total{method="GET",status="200"} 0
+http_requests_total{method="POST",status="200"} 0
+
+# HELP websocket_connections_active Number of active WebSocket connections
+# TYPE websocket_connections_active gauge
+websocket_connections_active %d
+
+# HELP server_uptime_seconds Server uptime in seconds
+# TYPE server_uptime_seconds counter
+server_uptime_seconds %d
+`, s.getWebSocketConnectionCount(), int(time.Now().Unix()))
+	
+	c.Header("Content-Type", "text/plain; charset=utf-8")
+	c.String(http.StatusOK, metrics)
 }
 
-// placeholderHandler is a temporary handler for routes that will be implemented later
-func (s *Server) placeholderHandler(endpoint string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.JSON(http.StatusNotImplemented, gin.H{
-			"message": fmt.Sprintf("%s endpoint not yet implemented", endpoint),
-			"status": "not_implemented",
-		})
+// getWebSocketConnectionCount returns the number of active WebSocket connections
+func (s *Server) getWebSocketConnectionCount() int {
+	if s.wsHandler == nil {
+		return 0
 	}
+	return s.wsHandler.GetConnectionCount()
 }

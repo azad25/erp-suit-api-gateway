@@ -6,12 +6,10 @@ package resolver
 
 import (
 	"context"
-	"fmt"
-	"time"
-
 	"erp-api-gateway/api/graphql/generated"
 	"erp-api-gateway/api/graphql/model"
 	authpb "erp-api-gateway/proto/gen/auth"
+	"fmt"
 )
 
 // Me is the resolver for the me field.
@@ -36,7 +34,7 @@ func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
 		})
 		return nil, fmt.Errorf("authentication service unavailable")
 	}
-	
+
 	resp, err := authClient.GetUser(ctx, &authpb.GetUserRequest{
 		UserId: userID,
 	})
@@ -81,7 +79,7 @@ func (r *queryResolver) User(ctx context.Context, id string) (*model.User, error
 		})
 		return nil, fmt.Errorf("authentication service unavailable")
 	}
-	
+
 	resp, err := authClient.GetUser(ctx, &authpb.GetUserRequest{
 		UserId: id,
 	})
@@ -118,7 +116,7 @@ func (r *queryResolver) Users(ctx context.Context, limit *int, offset *int, sear
 		"search":      search,
 		"user_claims": userClaims,
 	})
-	
+
 	// This would require implementing a ListUsers gRPC method in the auth service
 	// For now, return empty list
 	return []*model.User{}, nil
@@ -139,7 +137,7 @@ func (r *queryResolver) Roles(ctx context.Context) ([]*model.Role, error) {
 	r.Logger.Info("Roles query called", map[string]interface{}{
 		"user_claims": userClaims,
 	})
-	
+
 	return []*model.Role{}, nil
 }
 
@@ -158,7 +156,7 @@ func (r *queryResolver) Permissions(ctx context.Context) ([]*model.Permission, e
 	r.Logger.Info("Permissions query called", map[string]interface{}{
 		"user_claims": userClaims,
 	})
-	
+
 	return []*model.Permission{}, nil
 }
 
@@ -171,41 +169,3 @@ func (r *queryResolver) Health(ctx context.Context) (string, error) {
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 
 type queryResolver struct{ *Resolver }
-
-// Helper function to convert proto User to GraphQL User
-func convertProtoUserToGraphQL(protoUser *authpb.User) *model.User {
-	user := &model.User{
-		ID:        protoUser.Id,
-		FirstName: protoUser.FirstName,
-		LastName:  protoUser.LastName,
-		Email:     protoUser.Email,
-		CreatedAt: protoUser.CreatedAt.AsTime().Format(time.RFC3339),
-		UpdatedAt: protoUser.UpdatedAt.AsTime().Format(time.RFC3339),
-	}
-	
-	if protoUser.EmailVerifiedAt != nil {
-		emailVerified := protoUser.EmailVerifiedAt.AsTime().Format(time.RFC3339)
-		user.EmailVerifiedAt = &emailVerified
-	}
-	
-	// Convert roles and permissions
-	roles := make([]*model.Role, len(protoUser.Roles))
-	for i, roleName := range protoUser.Roles {
-		roles[i] = &model.Role{
-			ID:   roleName,
-			Name: roleName,
-		}
-	}
-	user.Roles = roles
-	
-	permissions := make([]*model.Permission, len(protoUser.Permissions))
-	for i, permName := range protoUser.Permissions {
-		permissions[i] = &model.Permission{
-			ID:   permName,
-			Name: permName,
-		}
-	}
-	user.Permissions = permissions
-	
-	return user
-}

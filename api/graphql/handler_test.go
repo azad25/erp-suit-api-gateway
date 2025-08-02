@@ -1,16 +1,21 @@
 package graphql
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 
 	"erp-api-gateway/internal/config"
 	"erp-api-gateway/internal/logging"
-	"erp-api-gateway/internal/services"
-	"erp-api-gateway/internal/services/grpc_client"
 )
 
-func TestNewGraphQLHandler(t *testing.T) {
-	// Create mock dependencies
+func TestGraphQLHandler_HealthQuery(t *testing.T) {
+	// Create basic config
 	cfg := &config.Config{
 		Server: config.ServerConfig{
 			CORS: config.CORSConfig{
@@ -21,47 +26,61 @@ func TestNewGraphQLHandler(t *testing.T) {
 	
 	logger := logging.NewNoOpLogger()
 	
-	// Create mock gRPC client (this would normally be properly initialized)
-	grpcClient := &grpc_client.GRPCClient{}
+	// For this basic test, we'll use nil for services since health query doesn't need them
+	handler := NewGraphQLHandler(cfg, logger, nil, nil, nil)
 	
-	// Create mock Redis client (this would normally be properly initialized)
-	redisClient := &services.RedisClient{}
+	// Create test server
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/graphql", handler.ServeHTTP())
 	
-	// Create mock Kafka producer (this would normally be properly initialized)
-	kafkaProducer := &services.KafkaProducer{}
-	
-	// Test handler creation
-	handler := NewGraphQLHandler(cfg, logger, grpcClient, redisClient, kafkaProducer)
-	
-	if handler == nil {
-		t.Fatal("Expected handler to be created, got nil")
+	// Prepare GraphQL query
+	query := map[string]interface{}{
+		"query": "{ health }",
 	}
 	
-	if handler.config != cfg {
-		t.Error("Expected config to be set correctly")
+	jsonData, _ := json.Marshal(query)
+	req := httptest.NewRequest("POST", "/graphql", bytes.NewBuffer(jsonData))
+	req.Header.Set("Content-Type", "application/json")
+	
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	
+	assert.Equal(t, http.StatusOK, w.Code)
+	
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	
+	data := response["data"].(map[string]interface{})
+	assert.Equal(t, "OK", data["health"])
+}
+
+// Note: More comprehensive tests with mocks would be added here
+// For now, we focus on basic functionality tests
+
+func TestGraphQLHandler_PlaygroundHandler(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			CORS: config.CORSConfig{
+				AllowedOrigins: []string{"http://localhost:3000"},
+			},
+		},
 	}
 	
-	if handler.logger != logger {
-		t.Error("Expected logger to be set correctly")
-	}
+	logger := logging.NewNoOpLogger()
 	
-	if handler.grpcClient != grpcClient {
-		t.Error("Expected gRPC client to be set correctly")
-	}
+	handler := NewGraphQLHandler(cfg, logger, nil, nil, nil)
 	
-	if handler.redisClient != redisClient {
-		t.Error("Expected Redis client to be set correctly")
-	}
+	// Create test server
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/playground", handler.PlaygroundHandler())
 	
-	if handler.kafkaProducer != kafkaProducer {
-		t.Error("Expected Kafka producer to be set correctly")
-	}
+	req := httptest.NewRequest("GET", "/playground", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
 	
-	if handler.dataLoader == nil {
-		t.Error("Expected DataLoader to be initialized")
-	}
-	
-	if handler.server == nil {
-		t.Error("Expected GraphQL server to be initialized")
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "GraphQL Playground")
 }

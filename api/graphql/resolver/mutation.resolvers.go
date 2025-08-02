@@ -6,13 +6,12 @@ package resolver
 
 import (
 	"context"
-	"fmt"
-	"time"
-
 	"erp-api-gateway/api/graphql/generated"
 	"erp-api-gateway/api/graphql/model"
 	"erp-api-gateway/internal/interfaces"
 	authpb "erp-api-gateway/proto/gen/auth"
+	"fmt"
+	"time"
 )
 
 // Login is the resolver for the login field.
@@ -26,7 +25,7 @@ func (r *mutationResolver) Login(ctx context.Context, input model.LoginInput) (*
 		})
 		return nil, fmt.Errorf("authentication service unavailable")
 	}
-	
+
 	resp, err := authClient.Login(ctx, &authpb.LoginRequest{
 		Email:      input.Email,
 		Password:   input.Password,
@@ -87,7 +86,7 @@ func (r *mutationResolver) Register(ctx context.Context, input model.RegisterInp
 		})
 		return nil, fmt.Errorf("authentication service unavailable")
 	}
-	
+
 	resp, err := authClient.Register(ctx, &authpb.RegisterRequest{
 		FirstName:            input.FirstName,
 		LastName:             input.LastName,
@@ -194,7 +193,7 @@ func (r *mutationResolver) RefreshToken(ctx context.Context, refreshToken string
 		})
 		return nil, fmt.Errorf("authentication service unavailable")
 	}
-	
+
 	resp, err := authClient.RefreshToken(ctx, &authpb.RefreshTokenRequest{
 		RefreshToken: refreshToken,
 	})

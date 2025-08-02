@@ -1,11 +1,11 @@
-# Go API Gateway
+# Unibase ERP API Gateway
 
 A high-performance, enterprise-grade API Gateway built in Go that serves as the central entry point for the ERP system.
 
 ## Project Structur e
 
 ```
-go-api-gateway/
+unibase-erp-api-gateway/
 ├── cmd/
 │   └── server/
 │       └── main.go              # Application entry point
@@ -30,6 +30,43 @@ go-api-gateway/
 ├── test/                       # Test files
 ├── go.mod                      # Go module definition
 └── README.md                   # This file
+```
+## Architecture 
+
+```mermaid
+flowchart TD
+    Client[Client]
+    APIGateway[API Gateway]
+    AuthService[Auth Service]
+    Infrastructure[Infrastructure]
+
+    Client -->|HTTP/gRPC Requests| APIGateway
+    APIGateway -->|gRPC Calls| AuthService
+
+    subgraph Infrastructure
+      Config[Configuration Management]
+      Logging[Logging]
+      Retry[Retry Mechanism]
+      HealthCheck[Health Checks]
+      CircuitBreaker[Circuit Breaker]
+    end
+
+    APIGateway --> Config
+    APIGateway --> Logging
+    APIGateway --> Retry
+    APIGateway --> HealthCheck
+    APIGateway --> CircuitBreaker
+
+    AuthService --> Config
+    AuthService --> Logging
+
+    APIGateway -.->|Uses| Infrastructure
+    AuthService -.->|Uses| Infrastructure
+
+    AuthService -->|Provides gRPC Endpoints| AuthService
+
+    %% Detailed calls
+    APIGateway -->|Login, ValidateToken, RefreshToken, RevokeToken, Register| AuthService
 ```
 
 ## Features

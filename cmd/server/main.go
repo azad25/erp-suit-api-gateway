@@ -7,8 +7,12 @@ import (
 	"os/signal"
 	"syscall"
 
+	"erp-api-gateway/internal/auth"
 	"erp-api-gateway/internal/config"
 	"erp-api-gateway/internal/logging"
+	"erp-api-gateway/internal/rbac"
+	"erp-api-gateway/internal/server"
+	"erp-api-gateway/internal/services"
 	"erp-api-gateway/internal/services/grpc_client"
 )
 
@@ -20,32 +24,84 @@ func main() {
 	}
 
 	// Initialize logger
-	logger := logging.NewNoOpLogger() // Replace with actual logger implementation
+	logger, err := logging.NewElasticLogger(&cfg.Logging)
+	if err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Close()
+
+	// Initialize Redis client
+	redisClient := services.NewRedisClient(&cfg.Redis, logging.NewSimpleLogger(logger))
+	defer redisClient.Close()
+
+	// Initialize Kafka producer (optional for testing)
+	kafkaProducer, err := services.NewKafkaProducer(&cfg.Kafka)
+	if err != nil {
+		log.Printf("Warning: Failed to initialize Kafka producer: %v", err)
+		log.Println("Continuing without Kafka producer...")
+		kafkaProducer = nil
+	} else {
+		defer kafkaProducer.Close()
+	}
+
+	// Initialize JWT validator
+	jwtValidator := auth.NewJWTValidator(&cfg.JWT, redisClient)
+
+	// Initialize policy engine (using default implementation)
+	policyEngine := rbac.NewDefaultPolicyEngine(redisClient, nil, nil)
 
 	// Initialize gRPC client
-	grpcClient, err := grpc_client.NewGRPCClient(&cfg.GRPC, logger)
+	grpcClient, err := grpc_client.NewGRPCClient(&cfg.GRPC, logging.NewNoOpLogger())
 	if err != nil {
 		log.Fatalf("Failed to initialize gRPC client: %v", err)
 	}
 	defer grpcClient.Close()
 
+	// Create server dependencies
+	deps := &server.Dependencies{
+		Logger:        logger,
+		GRPCClient:    grpcClient,
+		RedisClient:   redisClient,
+		KafkaProducer: kafkaProducer,
+		JWTValidator:  jwtValidator,
+		PolicyEngine:  policyEngine,
+	}
+
+	// Create and start server
+	srv := server.New(cfg, deps)
+
 	// Set up signal handling for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_ = ctx // Will be used for graceful shutdown in full implementation
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	log.Println("gRPC API Gateway starting...")
+	// Start server in a goroutine
+	go func() {
+		log.Printf("Starting ERP API Gateway on %s:%d", cfg.Server.Host, cfg.Server.Port)
+		if err := srv.Start(); err != nil {
+			log.Printf("Server error: %v", err)
+			cancel()
+		}
+	}()
 
 	// Wait for shutdown signal
-	<-sigChan
+	select {
+	case <-sigChan:
+		log.Println("Received shutdown signal")
+	case <-ctx.Done():
+		log.Println("Context cancelled")
+	}
+
 	log.Println("Shutting down gracefully...")
 
-	// Perform cleanup
-	if err := grpcClient.Close(); err != nil {
-		log.Printf("Error closing gRPC client: %v", err)
+	// Shutdown server with timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
+	defer shutdownCancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Error during server shutdown: %v", err)
 	}
 
 	log.Println("Shutdown complete")

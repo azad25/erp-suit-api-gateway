@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"erp-api-gateway/api/graphql/helpers"
 	"erp-api-gateway/api/graphql/model"
 	"erp-api-gateway/internal/services/grpc_client"
 	authpb "erp-api-gateway/proto/gen/auth"
@@ -146,7 +147,7 @@ func (ul *UserLoader) executeBatch(ctx context.Context) {
 			continue
 		}
 		
-		user := convertProtoUserToGraphQL(resp.Data)
+		user := helpers.ConvertProtoUserToGraphQL(resp.Data)
 		
 		ul.mutex.Lock()
 		ul.cache[userID] = user
@@ -264,21 +265,3 @@ func (upl *UserPermissionLoader) Load(ctx context.Context, userID string) ([]*mo
 	return permissions, nil
 }
 
-// Helper function to convert proto User to GraphQL User
-func convertProtoUserToGraphQL(protoUser *authpb.User) *model.User {
-	user := &model.User{
-		ID:        protoUser.Id,
-		FirstName: protoUser.FirstName,
-		LastName:  protoUser.LastName,
-		Email:     protoUser.Email,
-		CreatedAt: protoUser.CreatedAt.AsTime().Format(time.RFC3339),
-		UpdatedAt: protoUser.UpdatedAt.AsTime().Format(time.RFC3339),
-	}
-	
-	if protoUser.EmailVerifiedAt != nil {
-		emailVerified := protoUser.EmailVerifiedAt.AsTime().Format(time.RFC3339)
-		user.EmailVerifiedAt = &emailVerified
-	}
-	
-	return user
-}

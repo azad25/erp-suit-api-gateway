@@ -7,10 +7,9 @@ package resolver
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-
 	"erp-api-gateway/api/graphql/generated"
 	"erp-api-gateway/api/graphql/model"
+	"fmt"
 )
 
 // UserNotifications is the resolver for the userNotifications field.

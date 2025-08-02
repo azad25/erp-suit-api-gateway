@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -604,4 +605,433 @@ func TestAuthHandler_ConvertGRPCErrors(t *testing.T) {
 	assert.Contains(t, errors["email"], "Email is required")
 	assert.Contains(t, errors["email"], "Email format is invalid")
 	assert.Contains(t, errors["password"], "Password is too short")
+}
+
+// Additional comprehensive tests for better coverage
+
+func TestAuthHandler_RefreshToken_Success(t *testing.T) {
+	handler, mockGRPCClient, mockCacheService, mockEventPublisher, mockLogger := setupAuthHandlerTest()
+	
+	// Setup mocks
+	mockAuthClient := &MockAuthServiceClient{}
+	mockGRPCClient.On("AuthService", mock.Anything).Return(mockAuthClient, nil)
+	
+	grpcResponse := &authpb.RefreshTokenResponse{
+		Success: true,
+		Message: "Token refreshed successfully",
+		Data: &authpb.TokenPair{
+			AccessToken:  "new-access-token",
+			RefreshToken: "new-refresh-token",
+			ExpiresIn:    3600,
+		},
+	}
+	
+	mockAuthClient.On("RefreshToken", mock.Anything, mock.MatchedBy(func(req *authpb.RefreshTokenRequest) bool {
+		return req.RefreshToken == "valid-refresh-token"
+	})).Return(grpcResponse, nil)
+	
+	mockCacheService.On("Set", mock.Anything, mock.AnythingOfType("string"), mock.Anything, mock.Anything).Return(nil)
+	mockEventPublisher.On("PublishUserEvent", mock.Anything, "user-123", mock.AnythingOfType("interfaces.Event")).Return(nil)
+	mockLogger.On("LogInfo", mock.Anything, mock.AnythingOfType("string"), mock.Anything)
+
+	// Setup Gin
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/auth/refresh/", handler.RefreshToken)
+
+	// Create request
+	refreshReq := RefreshTokenRequest{
+		RefreshToken: "valid-refresh-token",
+	}
+	
+	reqBody, _ := json.Marshal(refreshReq)
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh/", bytes.NewBuffer(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	
+	// Execute request
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assertions
+	assert.Equal(t, http.StatusOK, w.Code)
+	
+	var response APIResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.True(t, response.Success)
+	assert.Equal(t, "Token refreshed successfully", response.Message)
+	
+	// Verify auth data
+	authData, ok := response.Data.(map[string]interface{})
+	assert.True(t, ok)
+	assert.Equal(t, "new-access-token", authData["access_token"])
+	assert.Equal(t, "new-refresh-token", authData["refresh_token"])
+	
+	// Verify mocks were called
+	mockGRPCClient.AssertExpectations(t)
+	mockAuthClient.AssertExpectations(t)
+	mockCacheService.AssertExpectations(t)
+	mockEventPublisher.AssertExpectations(t)
+}
+
+func TestAuthHandler_Logout_Success(t *testing.T) {
+	handler, mockGRPCClient, mockCacheService, mockEventPublisher, mockLogger := setupAuthHandlerTest()
+	
+	// Setup mocks
+	mockAuthClient := &MockAuthServiceClient{}
+	mockGRPCClient.On("AuthService", mock.Anything).Return(mockAuthClient, nil)
+	
+	grpcResponse := &authpb.RevokeTokenResponse{
+		Success: true,
+		Message: "Logout successful",
+	}
+	
+	mockAuthClient.On("RevokeToken", mock.Anything, mock.Anything).Return(grpcResponse, nil)
+	mockCacheService.On("Delete", mock.Anything, mock.AnythingOfType("string")).Return(nil)
+	mockEventPublisher.On("PublishUserEvent", mock.Anything, "user-123", mock.AnythingOfType("interfaces.Event")).Return(nil)
+	mockLogger.On("LogInfo", mock.Anything, mock.AnythingOfType("string"), mock.Anything)
+
+	// Setup Gin with user context
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "user-123")
+		c.Next()
+	})
+	router.POST("/auth/logout/", handler.Logout)
+
+	// Create request
+	req := httptest.NewRequest(http.MethodPost, "/auth/logout/", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	
+	// Execute request
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assertions
+	assert.Equal(t, http.StatusOK, w.Code)
+	
+	var response APIResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.True(t, response.Success)
+	assert.Equal(t, "Logout successful", response.Message)
+	
+	// Verify mocks were called
+	mockGRPCClient.AssertExpectations(t)
+	mockAuthClient.AssertExpectations(t)
+	mockCacheService.AssertExpectations(t)
+	mockEventPublisher.AssertExpectations(t)
+}
+
+func TestAuthHandler_ValidationErrors(t *testing.T) {
+	handler, _, _, _, _ := setupAuthHandlerTest()
+
+	// Setup Gin
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/auth/login/", handler.Login)
+	router.POST("/auth/register/", handler.Register)
+
+	t.Run("Login with invalid JSON", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/auth/login/", bytes.NewBuffer([]byte("invalid-json")))
+		req.Header.Set("Content-Type", "application/json")
+		
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		
+		var response APIResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.False(t, response.Success)
+		assert.Equal(t, "Invalid request format", response.Message)
+	})
+
+	t.Run("Login with missing email", func(t *testing.T) {
+		loginReq := LoginRequest{
+			Password: "password123",
+		}
+		
+		reqBody, _ := json.Marshal(loginReq)
+		req := httptest.NewRequest(http.MethodPost, "/auth/login/", bytes.NewBuffer(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		
+		var response APIResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.False(t, response.Success)
+		assert.Equal(t, "Validation failed", response.Message)
+		assert.Contains(t, response.Errors, "email")
+	})
+
+	t.Run("Register with invalid email format", func(t *testing.T) {
+		registerReq := RegisterRequest{
+			FirstName:            "John",
+			LastName:             "Doe",
+			Email:                "invalid-email",
+			Password:             "password123",
+			PasswordConfirmation: "password123",
+		}
+		
+		reqBody, _ := json.Marshal(registerReq)
+		req := httptest.NewRequest(http.MethodPost, "/auth/register/", bytes.NewBuffer(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		
+		var response APIResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.False(t, response.Success)
+		assert.Equal(t, "Validation failed", response.Message)
+		assert.Contains(t, response.Errors, "email")
+	})
+
+	t.Run("Register with short password", func(t *testing.T) {
+		registerReq := RegisterRequest{
+			FirstName:            "John",
+			LastName:             "Doe",
+			Email:                "john@example.com",
+			Password:             "123",
+			PasswordConfirmation: "123",
+		}
+		
+		reqBody, _ := json.Marshal(registerReq)
+		req := httptest.NewRequest(http.MethodPost, "/auth/register/", bytes.NewBuffer(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		
+		var response APIResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.False(t, response.Success)
+		assert.Equal(t, "Validation failed", response.Message)
+		assert.Contains(t, response.Errors, "password")
+	})
+}
+
+func TestAuthHandler_CacheIntegration(t *testing.T) {
+	handler, mockGRPCClient, mockCacheService, _, _ := setupAuthHandlerTest()
+	
+	t.Run("GetCurrentUser with cache hit", func(t *testing.T) {
+		// Setup cache hit
+		cachedUser := `{"id":"user-123","first_name":"John","last_name":"Doe","email":"john@example.com"}`
+		mockCacheService.On("Get", mock.Anything, "user_profile:user-123").Return([]byte(cachedUser), nil)
+
+		// Setup Gin with user context
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+		router.Use(func(c *gin.Context) {
+			c.Set("user_id", "user-123")
+			c.Next()
+		})
+		router.GET("/auth/me/", handler.GetCurrentUser)
+
+		// Create request
+		req := httptest.NewRequest(http.MethodGet, "/auth/me/", nil)
+		
+		// Execute request
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Assertions
+		assert.Equal(t, http.StatusOK, w.Code)
+		
+		var response APIResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.True(t, response.Success)
+		
+		// Verify gRPC was not called due to cache hit
+		mockGRPCClient.AssertNotCalled(t, "AuthService")
+		mockCacheService.AssertExpectations(t)
+	})
+
+	t.Run("GetCurrentUser with cache error", func(t *testing.T) {
+		// Setup mocks
+		mockAuthClient := &MockAuthServiceClient{}
+		mockGRPCClient.On("AuthService", mock.Anything).Return(mockAuthClient, nil)
+		
+		// Setup cache miss
+		mockCacheService.On("Get", mock.Anything, "user_profile:user-123").Return(nil, fmt.Errorf("cache error"))
+		
+		now := time.Now()
+		grpcResponse := &authpb.GetUserResponse{
+			Success: true,
+			Message: "User found",
+			Data: &authpb.User{
+				Id:        "user-123",
+				FirstName: "John",
+				LastName:  "Doe",
+				Email:     "john@example.com",
+				CreatedAt: timestamppb.New(now),
+				UpdatedAt: timestamppb.New(now),
+			},
+		}
+		
+		mockAuthClient.On("GetUser", mock.Anything, mock.Anything).Return(grpcResponse, nil)
+		mockCacheService.On("Set", mock.Anything, mock.AnythingOfType("string"), mock.Anything, mock.Anything).Return(nil)
+
+		// Setup Gin with user context
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+		router.Use(func(c *gin.Context) {
+			c.Set("user_id", "user-123")
+			c.Next()
+		})
+		router.GET("/auth/me/", handler.GetCurrentUser)
+
+		// Create request
+		req := httptest.NewRequest(http.MethodGet, "/auth/me/", nil)
+		
+		// Execute request
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Assertions
+		assert.Equal(t, http.StatusOK, w.Code)
+		
+		// Verify gRPC was called due to cache miss
+		mockGRPCClient.AssertExpectations(t)
+		mockAuthClient.AssertExpectations(t)
+		mockCacheService.AssertExpectations(t)
+	})
+}
+
+func TestAuthHandler_ErrorScenarios(t *testing.T) {
+	handler, mockGRPCClient, _, _, mockLogger := setupAuthHandlerTest()
+
+	t.Run("gRPC connection error", func(t *testing.T) {
+		// Setup connection error
+		mockGRPCClient.On("AuthService", mock.Anything).Return(nil, fmt.Errorf("connection failed"))
+		mockLogger.On("LogError", mock.Anything, mock.AnythingOfType("string"), mock.Anything)
+
+		// Setup Gin
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+		router.POST("/auth/login/", handler.Login)
+
+		// Create request
+		loginReq := LoginRequest{
+			Email:    "john@example.com",
+			Password: "password123",
+		}
+		
+		reqBody, _ := json.Marshal(loginReq)
+		req := httptest.NewRequest(http.MethodPost, "/auth/login/", bytes.NewBuffer(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		
+		// Execute request
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Assertions
+		assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+		
+		var response APIResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.False(t, response.Success)
+		assert.Equal(t, "Authentication service is currently unavailable", response.Message)
+		
+		mockGRPCClient.AssertExpectations(t)
+		mockLogger.AssertExpectations(t)
+	})
+
+	t.Run("gRPC service error", func(t *testing.T) {
+		// Setup mocks
+		mockAuthClient := &MockAuthServiceClient{}
+		mockGRPCClient.On("AuthService", mock.Anything).Return(mockAuthClient, nil)
+		
+		// Setup service error
+		mockAuthClient.On("Login", mock.Anything, mock.Anything).Return(nil, fmt.Errorf("internal server error"))
+		mockLogger.On("LogError", mock.Anything, mock.AnythingOfType("string"), mock.Anything)
+
+		// Setup Gin
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+		router.POST("/auth/login/", handler.Login)
+
+		// Create request
+		loginReq := LoginRequest{
+			Email:    "john@example.com",
+			Password: "password123",
+		}
+		
+		reqBody, _ := json.Marshal(loginReq)
+		req := httptest.NewRequest(http.MethodPost, "/auth/login/", bytes.NewBuffer(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		
+		// Execute request
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Assertions
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		
+		var response APIResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.False(t, response.Success)
+		assert.Equal(t, "Internal server error", response.Message)
+		
+		mockGRPCClient.AssertExpectations(t)
+		mockAuthClient.AssertExpectations(t)
+		mockLogger.AssertExpectations(t)
+	})
+}
+
+func TestAuthHandler_ConvertUser_EdgeCases(t *testing.T) {
+	handler, _, _, _, _ := setupAuthHandlerTest()
+	
+	t.Run("User with nil EmailVerifiedAt", func(t *testing.T) {
+		now := time.Now()
+		grpcUser := &authpb.User{
+			Id:              "user-123",
+			FirstName:       "John",
+			LastName:        "Doe",
+			Email:           "john@example.com",
+			EmailVerifiedAt: nil, // Nil timestamp
+			CreatedAt:       timestamppb.New(now),
+			UpdatedAt:       timestamppb.New(now),
+		}
+		
+		user := handler.convertUser(grpcUser)
+		
+		assert.Equal(t, "user-123", user.ID)
+		assert.Equal(t, "John", user.FirstName)
+		assert.Equal(t, "Doe", user.LastName)
+		assert.Equal(t, "john@example.com", user.Email)
+		assert.Nil(t, user.EmailVerifiedAt)
+		assert.Equal(t, now.Unix(), user.CreatedAt.Unix())
+		assert.Equal(t, now.Unix(), user.UpdatedAt.Unix())
+	})
+
+	t.Run("Empty gRPC errors", func(t *testing.T) {
+		grpcErrors := map[string]*authpb.FieldErrors{}
+		errors := handler.convertGRPCErrors(grpcErrors)
+		assert.Len(t, errors, 0)
+	})
+
+	t.Run("Nil field errors", func(t *testing.T) {
+		grpcErrors := map[string]*authpb.FieldErrors{
+			"email": nil,
+		}
+		errors := handler.convertGRPCErrors(grpcErrors)
+		assert.Len(t, errors, 0)
+	})
 }

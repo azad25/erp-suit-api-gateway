@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -599,6 +600,479 @@ func TestIsOwnerOrHasPermission(t *testing.T) {
 		})
 
 		req := httptest.NewRequest("GET", "/test2", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		mockPolicyEngine.AssertExpectations(t)
+	})
+}
+
+func TestRBACMiddleware_RequireAllPermissions(t *testing.T) {
+	tests := []struct {
+		name           string
+		permissions    []string
+		setupClaims    bool
+		hasAll         bool
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name:           "Has all permissions",
+			permissions:    []string{"users:read", "users:write"},
+			setupClaims:    true,
+			hasAll:         true,
+			expectedStatus: http.StatusOK,
+			expectedBody:   "success",
+		},
+		{
+			name:           "Missing some permissions",
+			permissions:    []string{"users:read", "admin:write"},
+			setupClaims:    true,
+			hasAll:         false,
+			expectedStatus: http.StatusForbidden,
+			expectedBody:   "Insufficient permissions",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup
+			mockPolicyEngine := new(MockPolicyEngine)
+			rbacMiddleware := NewRBACMiddleware(mockPolicyEngine, nil)
+			router := setupRBACTestRouter()
+
+			// Setup mock expectations
+			if tt.setupClaims {
+				claims := createRBACTestClaims()
+				mockPolicyEngine.On("CheckAllPermissions", mock.Anything, claims.UserID, tt.permissions, claims).
+					Return(tt.hasAll, nil)
+			}
+
+			// Setup route
+			router.Use(func(c *gin.Context) {
+				if tt.setupClaims {
+					claims := createRBACTestClaims()
+					c.Set(UserClaimsKey, claims)
+				}
+				c.Next()
+			})
+			router.GET("/test", rbacMiddleware.RequireAllPermissions(tt.permissions...), func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"message": "success"})
+			})
+
+			// Execute request
+			req := httptest.NewRequest("GET", "/test", nil)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			// Assert
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			assert.Contains(t, w.Body.String(), tt.expectedBody)
+
+			mockPolicyEngine.AssertExpectations(t)
+		})
+	}
+}
+
+func TestRBACMiddleware_RequireAnyRole(t *testing.T) {
+	tests := []struct {
+		name           string
+		roles          []string
+		setupClaims    bool
+		hasAny         bool
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name:           "Has one of multiple roles",
+			roles:          []string{"user", "admin"},
+			setupClaims:    true,
+			hasAny:         true,
+			expectedStatus: http.StatusOK,
+			expectedBody:   "success",
+		},
+		{
+			name:           "Missing all roles",
+			roles:          []string{"admin", "superuser"},
+			setupClaims:    true,
+			hasAny:         false,
+			expectedStatus: http.StatusForbidden,
+			expectedBody:   "Insufficient role",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup
+			mockPolicyEngine := new(MockPolicyEngine)
+			rbacMiddleware := NewRBACMiddleware(mockPolicyEngine, nil)
+			router := setupRBACTestRouter()
+
+			// Setup mock expectations
+			if tt.setupClaims {
+				claims := createRBACTestClaims()
+				mockPolicyEngine.On("CheckAnyRole", mock.Anything, claims.UserID, tt.roles, claims).
+					Return(tt.hasAny, nil)
+			}
+
+			// Setup route
+			router.Use(func(c *gin.Context) {
+				if tt.setupClaims {
+					claims := createRBACTestClaims()
+					c.Set(UserClaimsKey, claims)
+				}
+				c.Next()
+			})
+			router.GET("/test", rbacMiddleware.RequireAnyRole(tt.roles...), func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"message": "success"})
+			})
+
+			// Execute request
+			req := httptest.NewRequest("GET", "/test", nil)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			// Assert
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			assert.Contains(t, w.Body.String(), tt.expectedBody)
+
+			mockPolicyEngine.AssertExpectations(t)
+		})
+	}
+}
+
+func TestRBACMiddleware_RequireAllRoles(t *testing.T) {
+	tests := []struct {
+		name           string
+		roles          []string
+		setupClaims    bool
+		hasAll         bool
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name:           "Has all roles",
+			roles:          []string{"user", "manager"},
+			setupClaims:    true,
+			hasAll:         true,
+			expectedStatus: http.StatusOK,
+			expectedBody:   "success",
+		},
+		{
+			name:           "Missing some roles",
+			roles:          []string{"user", "admin"},
+			setupClaims:    true,
+			hasAll:         false,
+			expectedStatus: http.StatusForbidden,
+			expectedBody:   "Insufficient roles",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup
+			mockPolicyEngine := new(MockPolicyEngine)
+			rbacMiddleware := NewRBACMiddleware(mockPolicyEngine, nil)
+			router := setupRBACTestRouter()
+
+			// Setup mock expectations
+			if tt.setupClaims {
+				claims := createRBACTestClaims()
+				mockPolicyEngine.On("CheckAllRoles", mock.Anything, claims.UserID, tt.roles, claims).
+					Return(tt.hasAll, nil)
+			}
+
+			// Setup route
+			router.Use(func(c *gin.Context) {
+				if tt.setupClaims {
+					claims := createRBACTestClaims()
+					c.Set(UserClaimsKey, claims)
+				}
+				c.Next()
+			})
+			router.GET("/test", rbacMiddleware.RequireAllRoles(tt.roles...), func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"message": "success"})
+			})
+
+			// Execute request
+			req := httptest.NewRequest("GET", "/test", nil)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			// Assert
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			assert.Contains(t, w.Body.String(), tt.expectedBody)
+
+			mockPolicyEngine.AssertExpectations(t)
+		})
+	}
+}
+
+func TestRBACMiddleware_ConditionalPermission(t *testing.T) {
+	mockPolicyEngine := new(MockPolicyEngine)
+	rbacMiddleware := NewRBACMiddleware(mockPolicyEngine, nil)
+	router := setupRBACTestRouter()
+
+	t.Run("Condition false - skip permission check", func(t *testing.T) {
+		router.GET("/test1", rbacMiddleware.ConditionalPermission("admin:write", func(c *gin.Context) bool {
+			return false // Condition is false
+		}), func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"message": "success"})
+		})
+
+		req := httptest.NewRequest("GET", "/test1", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("Condition true - apply permission check", func(t *testing.T) {
+		claims := createRBACTestClaims()
+		mockPolicyEngine.On("CheckPermission", mock.Anything, claims.UserID, "admin:write", claims).
+			Return(true, nil)
+
+		router.GET("/test2", func(c *gin.Context) {
+			c.Set(UserClaimsKey, claims)
+			c.Next()
+		}, rbacMiddleware.ConditionalPermission("admin:write", func(c *gin.Context) bool {
+			return true // Condition is true
+		}), func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"message": "success"})
+		})
+
+		req := httptest.NewRequest("GET", "/test2", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		mockPolicyEngine.AssertExpectations(t)
+	})
+}
+
+func TestRBACMiddleware_ErrorHandling(t *testing.T) {
+	t.Run("Permission check error", func(t *testing.T) {
+		mockPolicyEngine := new(MockPolicyEngine)
+		rbacMiddleware := NewRBACMiddleware(mockPolicyEngine, nil)
+		router := setupRBACTestRouter()
+		
+		claims := createRBACTestClaims()
+		mockPolicyEngine.On("CheckPermission", mock.Anything, claims.UserID, "users:read", claims).
+			Return(false, fmt.Errorf("database error"))
+
+		router.Use(func(c *gin.Context) {
+			c.Set(UserClaimsKey, claims)
+			c.Next()
+		})
+		router.GET("/test", rbacMiddleware.RequirePermission("users:read"), func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"message": "success"})
+		})
+
+		req := httptest.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "Permission check failed")
+		mockPolicyEngine.AssertExpectations(t)
+	})
+
+	t.Run("Role check error", func(t *testing.T) {
+		mockPolicyEngine := new(MockPolicyEngine)
+		rbacMiddleware := NewRBACMiddleware(mockPolicyEngine, nil)
+		router := setupRBACTestRouter()
+		
+		claims := createRBACTestClaims()
+		mockPolicyEngine.On("CheckRole", mock.Anything, claims.UserID, "admin", claims).
+			Return(false, fmt.Errorf("database error"))
+
+		router.Use(func(c *gin.Context) {
+			c.Set(UserClaimsKey, claims)
+			c.Next()
+		})
+		router.GET("/test", rbacMiddleware.RequireRole("admin"), func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"message": "success"})
+		})
+
+		req := httptest.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "Role check failed")
+		mockPolicyEngine.AssertExpectations(t)
+	})
+}
+
+func TestRBACHelperFunctions_Extended(t *testing.T) {
+	claims := createRBACTestClaims()
+
+	t.Run("CheckUserAnyPermission", func(t *testing.T) {
+		mockPolicyEngine := new(MockPolicyEngine)
+		router := setupRBACTestRouter()
+		
+		mockPolicyEngine.On("CheckAnyPermission", mock.Anything, claims.UserID, []string{"users:read", "admin:write"}, claims).
+			Return(true, nil)
+
+		router.GET("/test", func(c *gin.Context) {
+			c.Set(UserClaimsKey, claims)
+			result := CheckUserAnyPermission(c, mockPolicyEngine, "users:read", "admin:write")
+			assert.True(t, result)
+			c.JSON(http.StatusOK, gin.H{"result": result})
+		})
+
+		req := httptest.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		mockPolicyEngine.AssertExpectations(t)
+	})
+
+	t.Run("CheckUserAllPermissions", func(t *testing.T) {
+		mockPolicyEngine := new(MockPolicyEngine)
+		router := setupRBACTestRouter()
+		
+		mockPolicyEngine.On("CheckAllPermissions", mock.Anything, claims.UserID, []string{"users:read", "users:write"}, claims).
+			Return(true, nil)
+
+		router.GET("/test", func(c *gin.Context) {
+			c.Set(UserClaimsKey, claims)
+			result := CheckUserAllPermissions(c, mockPolicyEngine, "users:read", "users:write")
+			assert.True(t, result)
+			c.JSON(http.StatusOK, gin.H{"result": result})
+		})
+
+		req := httptest.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		mockPolicyEngine.AssertExpectations(t)
+	})
+
+	t.Run("CheckUserAnyRole", func(t *testing.T) {
+		mockPolicyEngine := new(MockPolicyEngine)
+		router := setupRBACTestRouter()
+		
+		mockPolicyEngine.On("CheckAnyRole", mock.Anything, claims.UserID, []string{"user", "admin"}, claims).
+			Return(true, nil)
+
+		router.GET("/test", func(c *gin.Context) {
+			c.Set(UserClaimsKey, claims)
+			result := CheckUserAnyRole(c, mockPolicyEngine, "user", "admin")
+			assert.True(t, result)
+			c.JSON(http.StatusOK, gin.H{"result": result})
+		})
+
+		req := httptest.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		mockPolicyEngine.AssertExpectations(t)
+	})
+
+	t.Run("CheckUserAllRoles", func(t *testing.T) {
+		mockPolicyEngine := new(MockPolicyEngine)
+		router := setupRBACTestRouter()
+		
+		mockPolicyEngine.On("CheckAllRoles", mock.Anything, claims.UserID, []string{"user", "manager"}, claims).
+			Return(true, nil)
+
+		router.GET("/test", func(c *gin.Context) {
+			c.Set(UserClaimsKey, claims)
+			result := CheckUserAllRoles(c, mockPolicyEngine, "user", "manager")
+			assert.True(t, result)
+			c.JSON(http.StatusOK, gin.H{"result": result})
+		})
+
+		req := httptest.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		mockPolicyEngine.AssertExpectations(t)
+	})
+}
+
+func TestRBACHelperFunctions_NoAuth(t *testing.T) {
+	t.Run("CheckUserPermission_NoAuth", func(t *testing.T) {
+		mockPolicyEngine := new(MockPolicyEngine)
+		router := setupRBACTestRouter()
+		
+		router.GET("/test", func(c *gin.Context) {
+			result := CheckUserPermission(c, mockPolicyEngine, "users:read")
+			assert.False(t, result)
+			c.JSON(http.StatusOK, gin.H{"result": result})
+		})
+
+		req := httptest.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("CheckUserRole_NoAuth", func(t *testing.T) {
+		mockPolicyEngine := new(MockPolicyEngine)
+		router := setupRBACTestRouter()
+		
+		router.GET("/test", func(c *gin.Context) {
+			result := CheckUserRole(c, mockPolicyEngine, "admin")
+			assert.False(t, result)
+			c.JSON(http.StatusOK, gin.H{"result": result})
+		})
+
+		req := httptest.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+}
+
+func TestRBACHelperFunctions_Errors(t *testing.T) {
+	claims := createRBACTestClaims()
+
+	t.Run("CheckUserPermission_Error", func(t *testing.T) {
+		mockPolicyEngine := new(MockPolicyEngine)
+		router := setupRBACTestRouter()
+		
+		mockPolicyEngine.On("CheckPermission", mock.Anything, claims.UserID, "users:read", claims).
+			Return(false, fmt.Errorf("database error"))
+
+		router.GET("/test", func(c *gin.Context) {
+			c.Set(UserClaimsKey, claims)
+			result := CheckUserPermission(c, mockPolicyEngine, "users:read")
+			assert.False(t, result)
+			c.JSON(http.StatusOK, gin.H{"result": result})
+		})
+
+		req := httptest.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		mockPolicyEngine.AssertExpectations(t)
+	})
+
+	t.Run("CheckUserRole_Error", func(t *testing.T) {
+		mockPolicyEngine := new(MockPolicyEngine)
+		router := setupRBACTestRouter()
+		
+		mockPolicyEngine.On("CheckRole", mock.Anything, claims.UserID, "admin", claims).
+			Return(false, fmt.Errorf("database error"))
+
+		router.GET("/test", func(c *gin.Context) {
+			c.Set(UserClaimsKey, claims)
+			result := CheckUserRole(c, mockPolicyEngine, "admin")
+			assert.False(t, result)
+			c.JSON(http.StatusOK, gin.H{"result": result})
+		})
+
+		req := httptest.NewRequest("GET", "/test", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
