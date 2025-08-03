@@ -39,8 +39,8 @@ RUN apk add --no-cache git ca-certificates tzdata curl
 
 WORKDIR /app
 
-# Install air for hot reloading
-RUN go install github.com/cosmtrek/air@latest
+# Install air for hot reloading (compatible with Go 1.23)
+RUN go install github.com/cosmtrek/air@v1.49.0
 
 COPY go.mod go.sum ./
 RUN go mod download
