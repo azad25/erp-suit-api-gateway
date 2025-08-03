@@ -169,7 +169,7 @@ flowchart TD
 ## Getting Started
 
 ### Prerequisites
-- Go 1.21 or later
+- Go 1.23 or later
 - Redis server (for caching and pub/sub)
 - Kafka cluster (for event publishing)
 - Elasticsearch (for logging)

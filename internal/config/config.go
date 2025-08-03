@@ -219,7 +219,7 @@ func LoadFromPath(configPath string) (*Config, error) {
 // setDefaults sets default configuration values
 func setDefaults(cfg *Config) {
 	// Server defaults
-	cfg.Server.Port = 8080
+	cfg.Server.Port = 8000
 	cfg.Server.Host = "0.0.0.0"
 	cfg.Server.ReadTimeout = 30 * time.Second
 	cfg.Server.WriteTimeout = 30 * time.Second

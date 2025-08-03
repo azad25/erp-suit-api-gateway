@@ -33,7 +33,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     cmd/server/main.go
 
 # Development stage (for local development)
-FROM golang:1.21-alpine AS development
+FROM golang:1.23-alpine AS development
 
 RUN apk add --no-cache git ca-certificates tzdata curl
 
@@ -47,7 +47,7 @@ RUN go mod download
 
 COPY . .
 
-EXPOSE 8080
+EXPOSE 8000
 
 CMD ["air", "-c", ".air.toml"]
 
@@ -68,7 +68,7 @@ COPY --from=builder /app/config.yaml /app/config.yaml
 USER 65534:65534
 
 # Expose port
-EXPOSE 8080
+EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

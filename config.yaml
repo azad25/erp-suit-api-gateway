@@ -1,0 +1,93 @@
+# Go API Gateway Configuration
+# This file is used by the Go API Gateway service
+
+server:
+  port: 8000
+  host: "0.0.0.0"
+  read_timeout: "30s"
+  write_timeout: "30s"
+  shutdown_timeout: "10s"
+  cors:
+    allowed_origins:
+      - "http://localhost:3000"
+      - "http://127.0.0.1:3000"
+      - "http://localhost"
+      - "http://erp-frontend:3000"
+      - "http://graphql-gateway:4000"
+      - "http://websocket-server:3001"
+    allowed_methods:
+      - "GET"
+      - "POST"
+      - "PUT"
+      - "DELETE"
+      - "OPTIONS"
+      - "PATCH"
+    allowed_headers:
+      - "Authorization"
+      - "Content-Type"
+      - "X-Requested-With"
+      - "Accept"
+      - "Origin"
+    allow_credentials: true
+    max_age: 86400
+
+database:
+  host: "postgres"
+  port: 5432
+  name: "erp_gateway"
+  user: "postgres"
+  password: "postgres"
+  ssl_mode: "disable"
+
+redis:
+  host: "redis"
+  port: 6379
+  password: "redispassword"
+  db: 1
+  pool_size: 10
+  min_idle_conns: 5
+  dial_timeout: "5s"
+  read_timeout: "3s"
+  write_timeout: "3s"
+
+kafka:
+  brokers:
+    - "kafka:29092"
+  client_id: "go-api-gateway"
+  retry_max: 3
+  retry_backoff: "100ms"
+  flush_messages: 100
+  flush_bytes: 1048576  # 1MB
+  flush_timeout: "1s"
+
+grpc:
+  auth_service:
+    host: "auth-service"
+    port: 50051
+    timeout: "10s"
+    max_retries: 3
+    retry_backoff: "100ms"
+    circuit_breaker:
+      max_failures: 5
+      timeout: "60s"
+      interval: "10s"
+
+jwt:
+  public_key_path: ""  # Path to RSA public key file
+  jwks_url: "http://auth-service:8080/api/v1/.well-known/jwks.json"  # JWKS endpoint URL
+  cache_ttl: "1h"
+  algorithm: "RS256"
+  issuer: "erp-auth-service"
+
+logging:
+  level: "info"  # debug, info, warn, error, fatal
+  format: "json"  # json, text
+  output: "stdout"  # stdout, stderr, file
+  buffer_size: 1000
+  flush_interval: "5s"
+  elasticsearch:
+    urls:
+      - "http://elasticsearch:9200"
+    username: ""
+    password: ""
+    index_name: "go-api-gateway-logs"

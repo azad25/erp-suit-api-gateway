@@ -16,7 +16,7 @@
 
 ### Prerequisites
 
-- **Go 1.21+**: Latest stable version of Go
+- **Go 1.23+**: Latest stable version of Go
 - **Docker**: For containerization and local development
 - **Docker Compose**: For orchestrating local services
 - **Redis**: For caching and pub/sub messaging
