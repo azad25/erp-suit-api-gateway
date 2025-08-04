@@ -20,6 +20,8 @@ type RegisterRequest struct {
 	Email                string `json:"email" binding:"required,email"`
 	Password             string `json:"password" binding:"required,min=8"`
 	PasswordConfirmation string `json:"password_confirmation" binding:"required"`
+	OrganizationName     string `json:"organization_name" binding:"required,min=2,max=100"`
+	Domain               string `json:"domain" binding:"required,min=2,max=100"`
 }
 
 // RefreshTokenRequest represents the refresh token request payload

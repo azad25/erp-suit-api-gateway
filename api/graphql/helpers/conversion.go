@@ -18,29 +18,17 @@ func ConvertProtoUserToGraphQL(protoUser *authpb.User) *model.User {
 		UpdatedAt: protoUser.UpdatedAt.AsTime().Format(time.RFC3339),
 	}
 	
-	if protoUser.EmailVerifiedAt != nil {
-		emailVerified := protoUser.EmailVerifiedAt.AsTime().Format(time.RFC3339)
-		user.EmailVerifiedAt = &emailVerified
-	}
+	// The new User struct doesn't have EmailVerifiedAt field
+	// Email verification status is now handled through the is_verified boolean field
+	user.EmailVerifiedAt = nil
 	
-	// Convert roles and permissions
-	roles := make([]*model.Role, len(protoUser.Roles))
-	for i, roleName := range protoUser.Roles {
-		roles[i] = &model.Role{
-			ID:   roleName,
-			Name: roleName,
-		}
-	}
-	user.Roles = roles
+	// The new User struct doesn't have Roles field
+	// Roles are now managed separately and can be retrieved via separate gRPC calls if needed
+	user.Roles = []*model.Role{}
 	
-	permissions := make([]*model.Permission, len(protoUser.Permissions))
-	for i, permName := range protoUser.Permissions {
-		permissions[i] = &model.Permission{
-			ID:   permName,
-			Name: permName,
-		}
-	}
-	user.Permissions = permissions
+	// Permissions are now handled through role-based access control
+	// and checked via the CheckPermission gRPC method when needed
+	user.Permissions = []*model.Permission{}
 	
 	return user
 }

@@ -89,6 +89,7 @@ type GRPCConfig struct {
 	CRMServiceAddress     string        `yaml:"crm_service_address"`
 	HRMServiceAddress     string        `yaml:"hrm_service_address"`
 	FinanceServiceAddress string        `yaml:"finance_service_address"`
+	ServiceKey            string        `yaml:"service_key" env:"GRPC_SERVICE_KEY"`
 	ConsulAddress         string        `yaml:"consul_address"`
 	MaxRetries            int           `yaml:"max_retries"`
 	RetryInitialInterval  time.Duration `yaml:"retry_initial_interval"`
@@ -124,6 +125,7 @@ type ServiceConfig struct {
 type JWTConfig struct {
 	PublicKeyPath string        `yaml:"public_key_path" json:"public_key_path" env:"JWT_PUBLIC_KEY_PATH"`
 	JWKSUrl       string        `yaml:"jwks_url" json:"jwks_url" env:"JWT_JWKS_URL"`
+	Secret        string        `yaml:"secret" json:"secret" env:"JWT_SECRET"`
 	CacheTTL      time.Duration `yaml:"cache_ttl" json:"cache_ttl" env:"JWT_CACHE_TTL"`
 	Algorithm     string        `yaml:"algorithm" json:"algorithm" env:"JWT_ALGORITHM" validate:"oneof=RS256 ES256 HS256"`
 	Issuer        string        `yaml:"issuer" json:"issuer" env:"JWT_ISSUER"`
@@ -176,6 +178,8 @@ func Load() (*Config, error) {
 		if err := loadFromFile(cfg, configFile); err != nil {
 			return nil, fmt.Errorf("failed to load config file: %w", err)
 		}
+		// Sync service addresses after loading from file
+		syncServiceAddresses(cfg)
 	}
 	
 	// Override with environment variables
@@ -202,6 +206,9 @@ func LoadFromPath(configPath string) (*Config, error) {
 	if err := loadFromFile(cfg, configPath); err != nil {
 		return nil, fmt.Errorf("failed to load config file %s: %w", configPath, err)
 	}
+	
+	// Sync service addresses after loading from file
+	syncServiceAddresses(cfg)
 	
 	// Override with environment variables
 	if err := loadFromEnv(cfg); err != nil {
@@ -265,8 +272,18 @@ func setDefaults(cfg *Config) {
 	setServiceDefaults(&cfg.GRPC.HRMService, "localhost", 50053)
 	setServiceDefaults(&cfg.GRPC.FinanceService, "localhost", 50054)
 	
+	// Set service address strings for backward compatibility
+	cfg.GRPC.AuthServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.AuthService.Host, cfg.GRPC.AuthService.Port)
+	cfg.GRPC.CRMServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.CRMService.Host, cfg.GRPC.CRMService.Port)
+	cfg.GRPC.HRMServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.HRMService.Host, cfg.GRPC.HRMService.Port)
+	cfg.GRPC.FinanceServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.FinanceService.Host, cfg.GRPC.FinanceService.Port)
+	
+	// Set default service key for internal service authentication
+	cfg.GRPC.ServiceKey = "internal-service-key"
+	
 	// JWT defaults
-	cfg.JWT.Algorithm = "RS256"
+	cfg.JWT.Algorithm = "HS256"
+	cfg.JWT.Secret = "your-super-secret-jwt-key-change-in-production"
 	cfg.JWT.CacheTTL = 1 * time.Hour
 	cfg.JWT.Issuer = "erp-auth-service"
 	cfg.JWT.JWKSUrl = "http://localhost:8081/.well-known/jwks.json"
@@ -306,6 +323,14 @@ func setServiceDefaults(svc *ServiceConfig, host string, port int) {
 	svc.CircuitBreaker.Timeout = 60 * time.Second
 	svc.CircuitBreaker.Interval = 10 * time.Second
 	svc.CircuitBreaker.ReadyToTrip = 3
+}
+
+// syncServiceAddresses synchronizes service address strings from ServiceConfig structs
+func syncServiceAddresses(cfg *Config) {
+	cfg.GRPC.AuthServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.AuthService.Host, cfg.GRPC.AuthService.Port)
+	cfg.GRPC.CRMServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.CRMService.Host, cfg.GRPC.CRMService.Port)
+	cfg.GRPC.HRMServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.HRMService.Host, cfg.GRPC.HRMService.Port)
+	cfg.GRPC.FinanceServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.FinanceService.Host, cfg.GRPC.FinanceService.Port)
 }
 
 // loadFromFile loads configuration from YAML or JSON file

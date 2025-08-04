@@ -5,20 +5,20 @@ type Mutation {
   """
   User login
   """
-  login(input: LoginInput!): AuthResponse!
+  Authenticate(input: LoginInput!): AuthResponse!
 
   """
-  User registration
+  User Register
   """
-  register(input: RegisterInput!): AuthResponse!
+  CreateUser(input: RegisterInput!): AuthResponse!
 
   """
-  User logout
+  User Logout
   """
-  logout: MutationResponse!
+  RevokeToken: MutationResponse!
 
   """
   Refresh access token
   """
-  refreshToken(refreshToken: String!): AuthResponse!
+  RefreshToken(refreshToken: String!): AuthResponse!
 }

@@ -143,11 +143,15 @@ func (ul *UserLoader) executeBatch(ctx context.Context) {
 			UserId: userID,
 		})
 		
-		if err != nil || !resp.Success {
+		if err != nil {
 			continue
 		}
 		
-		user := helpers.ConvertProtoUserToGraphQL(resp.Data)
+		if resp.Error != "" {
+			continue
+		}
+		
+		user := helpers.ConvertProtoUserToGraphQL(resp.User)
 		
 		ul.mutex.Lock()
 		ul.cache[userID] = user
@@ -190,17 +194,18 @@ func (url *UserRoleLoader) Load(ctx context.Context, userID string) ([]*model.Ro
 		UserId: userID,
 	})
 	
-	if err != nil || !resp.Success {
+	if err != nil {
 		return nil, fmt.Errorf("failed to load user roles: %w", err)
 	}
 	
-	roles := make([]*model.Role, len(resp.Data.Roles))
-	for i, roleName := range resp.Data.Roles {
-		roles[i] = &model.Role{
-			ID:   roleName,
-			Name: roleName,
-		}
+	if resp.Error != "" {
+		return nil, fmt.Errorf("failed to load user roles: %s", resp.Error)
 	}
+	
+	// The new User struct doesn't have Roles field
+	// Roles are now managed separately and would need to be retrieved via separate gRPC calls
+	// For now, return empty roles array
+	roles := []*model.Role{}
 	
 	// Cache the result
 	url.mutex.Lock()
@@ -245,17 +250,18 @@ func (upl *UserPermissionLoader) Load(ctx context.Context, userID string) ([]*mo
 		UserId: userID,
 	})
 	
-	if err != nil || !resp.Success {
+	if err != nil {
 		return nil, fmt.Errorf("failed to load user permissions: %w", err)
 	}
 	
-	permissions := make([]*model.Permission, len(resp.Data.Permissions))
-	for i, permName := range resp.Data.Permissions {
-		permissions[i] = &model.Permission{
-			ID:   permName,
-			Name: permName,
-		}
+	if resp.Error != "" {
+		return nil, fmt.Errorf("failed to load user permissions: %s", resp.Error)
 	}
+	
+	// The new User struct doesn't have Permissions field
+	// Permissions are now managed separately and would need to be retrieved via separate gRPC calls
+	// For now, return empty permissions array
+	permissions := []*model.Permission{}
 	
 	// Cache the result
 	upl.mutex.Lock()

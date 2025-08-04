@@ -61,14 +61,26 @@ func (v *JWTValidator) ValidateToken(tokenString string) (*interfaces.Claims, er
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
-		// Get the key ID from the token header
-		keyID, ok := token.Header["kid"].(string)
-		if !ok {
-			return nil, fmt.Errorf("missing key ID in token header")
+		// Handle different signing methods
+		switch v.config.Algorithm {
+		case "HS256", "HS384", "HS512":
+			// HMAC signing method - use shared secret
+			if v.config.Secret == "" {
+				return nil, fmt.Errorf("JWT secret not configured for HMAC signing")
+			}
+			return []byte(v.config.Secret), nil
+			
+		case "RS256", "RS384", "RS512", "ES256", "ES384", "ES512":
+			// RSA/ECDSA signing method - use public key from JWKS
+			keyID, ok := token.Header["kid"].(string)
+			if !ok {
+				return nil, fmt.Errorf("missing key ID in token header")
+			}
+			return v.GetPublicKey(keyID)
+			
+		default:
+			return nil, fmt.Errorf("unsupported signing method: %s", v.config.Algorithm)
 		}
-
-		// Get the public key for validation
-		return v.GetPublicKey(keyID)
 	})
 
 	if err != nil {

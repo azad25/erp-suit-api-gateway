@@ -64,6 +64,7 @@ func NewGRPCClient(cfg *config.GRPCConfig, logger logging.Logger) (*GRPCClient, 
 		ConnectTimeout:      cfg.ConnectTimeout,
 		EnableHealthCheck:   cfg.EnableHealthCheck,
 		HealthCheckInterval: cfg.HealthCheckInterval,
+		ServiceKey:          cfg.ServiceKey,
 	}
 
 	healthChecker := NewHealthChecker(logger)

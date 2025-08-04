@@ -73,10 +73,11 @@ grpc:
       interval: "10s"
 
 jwt:
-  public_key_path: ""  # Path to RSA public key file
-  jwks_url: "http://auth-service:8080/api/v1/.well-known/jwks.json"  # JWKS endpoint URL
+  secret: "your-super-secret-jwt-key-change-in-production"  # Shared secret for HS256
+  public_key_path: ""  # Path to RSA public key file (not used with HS256)
+  jwks_url: "http://auth-service:8080/api/v1/.well-known/jwks.json"  # JWKS endpoint URL (not used with HS256)
   cache_ttl: "1h"
-  algorithm: "RS256"
+  algorithm: "HS256"
   issuer: "erp-auth-service"
 
 logging:

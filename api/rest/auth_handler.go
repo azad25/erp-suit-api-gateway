@@ -61,15 +61,20 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Create gRPC login request
-	grpcReq := &authpb.LoginRequest{
+	// Create gRPC authenticate request
+	grpcReq := &authpb.AuthenticateRequest{
 		Email:      req.Email,
 		Password:   req.Password,
 		RememberMe: req.RememberMe,
+		SecurityContext: &authpb.SecurityContext{
+			IpAddress:  c.ClientIP(),
+			UserAgent:  c.GetHeader("User-Agent"),
+			SessionId:  c.GetHeader("X-Session-ID"),
+		},
 	}
 
 	// Call auth service
-	grpcResp, err := authClient.Login(ctx, grpcReq)
+	grpcResp, err := authClient.Authenticate(ctx, grpcReq)
 	if err != nil {
 		h.logger.LogError(ctx, "Auth service login failed", map[string]interface{}{
 			"email": req.Email,
@@ -84,13 +89,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	// Handle unsuccessful login
 	if !grpcResp.Success {
-		errors := h.convertGRPCErrors(grpcResp.Errors)
-		c.JSON(http.StatusUnauthorized, NewErrorResponse(grpcResp.Message, errors))
+		if grpcResp.Error != "" {
+			c.JSON(http.StatusUnauthorized, NewErrorResponse(grpcResp.Error, nil))
+		} else {
+			c.JSON(http.StatusUnauthorized, NewErrorResponse("Authentication failed", nil))
+		}
 		return
 	}
 
 	// Convert gRPC response to HTTP response
-	authData := h.convertAuthData(grpcResp.Data)
+	authData := h.convertAuthenticateData(grpcResp)
 	
 	// Cache user profile for performance
 	if err := h.cacheUserProfile(ctx, authData.User); err != nil {
@@ -151,17 +159,23 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Create gRPC register request
-	grpcReq := &authpb.RegisterRequest{
-		FirstName:            req.FirstName,
-		LastName:             req.LastName,
-		Email:                req.Email,
-		Password:             req.Password,
-		PasswordConfirmation: req.PasswordConfirmation,
+	// Create gRPC create organization request (which creates both org and admin user)
+	grpcReq := &authpb.CreateOrganizationRequest{
+		Name:           req.OrganizationName,
+		Domain:         req.Domain,
+		AdminEmail:     req.Email,
+		AdminPassword:  req.Password,
+		AdminFirstName: req.FirstName,
+		AdminLastName:  req.LastName,
+		SecurityContext: &authpb.SecurityContext{
+			IpAddress: c.ClientIP(),
+			UserAgent: c.GetHeader("User-Agent"),
+			SessionId: c.GetHeader("X-Session-ID"),
+		},
 	}
 
 	// Call auth service
-	grpcResp, err := authClient.Register(ctx, grpcReq)
+	grpcResp, err := authClient.CreateOrganization(ctx, grpcReq)
 	if err != nil {
 		h.logger.LogError(ctx, "Auth service register failed", map[string]interface{}{
 			"email": req.Email,
@@ -176,13 +190,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	// Handle unsuccessful registration
 	if !grpcResp.Success {
-		errors := h.convertGRPCErrors(grpcResp.Errors)
-		c.JSON(http.StatusBadRequest, NewErrorResponse(grpcResp.Message, errors))
+		if grpcResp.Error != "" {
+			c.JSON(http.StatusBadRequest, NewErrorResponse(grpcResp.Error, nil))
+		} else {
+			c.JSON(http.StatusBadRequest, NewErrorResponse("Registration failed", nil))
+		}
 		return
 	}
 
 	// Convert gRPC response to HTTP response
-	authData := h.convertAuthData(grpcResp.Data)
+	authData := h.convertCreateOrganizationData(grpcResp)
 
 	// Cache user profile for performance
 	if err := h.cacheUserProfile(ctx, authData.User); err != nil {
@@ -285,7 +302,11 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		"user_id": userIDStr,
 	})
 
-	c.JSON(http.StatusOK, NewSuccessResponse(nil, grpcResp.Message))
+	if grpcResp.Success {
+		c.JSON(http.StatusOK, NewSuccessResponse(nil, "Logout successful"))
+	} else {
+		c.JSON(http.StatusInternalServerError, NewErrorResponse("Logout failed", nil))
+	}
 }
 
 // RefreshToken handles token refresh requests
@@ -331,14 +352,17 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	}
 
 	// Handle unsuccessful refresh
-	if !grpcResp.Success {
-		errors := h.convertGRPCErrors(grpcResp.Errors)
-		c.JSON(http.StatusUnauthorized, NewErrorResponse(grpcResp.Message, errors))
+	if grpcResp.Error != "" {
+		c.JSON(http.StatusUnauthorized, NewErrorResponse(grpcResp.Error, nil))
 		return
 	}
 
 	// Convert gRPC response to HTTP response
-	tokenPair := h.convertTokenPair(grpcResp.Data)
+	tokenPair := &TokenPair{
+		AccessToken:  grpcResp.AccessToken,
+		RefreshToken: grpcResp.RefreshToken,
+		ExpiresIn:    int64(grpcResp.ExpiresIn),
+	}
 
 	// Publish token refresh event
 	if userID, exists := c.Get("user_id"); exists {
@@ -412,14 +436,13 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	}
 
 	// Handle unsuccessful response
-	if !grpcResp.Success {
-		errors := h.convertGRPCErrors(grpcResp.Errors)
-		c.JSON(http.StatusNotFound, NewErrorResponse(grpcResp.Message, errors))
+	if grpcResp.Error != "" {
+		c.JSON(http.StatusNotFound, NewErrorResponse(grpcResp.Error, nil))
 		return
 	}
 
 	// Convert gRPC user to HTTP user
-	user := h.convertUser(grpcResp.Data)
+	user := h.convertUser(grpcResp.User)
 
 	// Cache user profile for future requests
 	if err := h.cacheUserProfile(ctx, user); err != nil {
@@ -449,33 +472,44 @@ func (h *AuthHandler) handleValidationError(c *gin.Context, err error) {
 }
 
 // convertGRPCErrors converts gRPC field errors to HTTP format
-func (h *AuthHandler) convertGRPCErrors(grpcErrors map[string]*authpb.FieldErrors) map[string][]string {
-	if grpcErrors == nil {
-		return nil
-	}
-
-	errors := make(map[string][]string)
-	for field, fieldErrors := range grpcErrors {
-		if fieldErrors != nil {
-			errors[field] = fieldErrors.Errors
-		}
-	}
-	return errors
+// convertGRPCErrors is no longer needed as the new auth service uses simple error strings
+// This method is kept for backward compatibility but returns empty map
+func (h *AuthHandler) convertGRPCErrors(grpcErrors interface{}) map[string][]string {
+	// The new auth service uses simple error strings instead of structured field errors
+	return make(map[string][]string)
 }
 
-// convertAuthData converts gRPC AuthData to HTTP AuthData
-func (h *AuthHandler) convertAuthData(grpcData *authpb.AuthData) *AuthData {
-	if grpcData == nil {
+// convertAuthenticateData converts gRPC AuthenticateResponse to HTTP AuthData
+func (h *AuthHandler) convertAuthenticateData(grpcResp *authpb.AuthenticateResponse) *AuthData {
+	if grpcResp == nil || grpcResp.Tokens == nil {
 		return nil
 	}
 
 	return &AuthData{
-		User:         h.convertUser(grpcData.User),
-		AccessToken:  grpcData.AccessToken,
-		RefreshToken: grpcData.RefreshToken,
-		ExpiresIn:    grpcData.ExpiresIn,
+		User:         h.convertUser(grpcResp.User),
+		AccessToken:  grpcResp.Tokens.AccessToken,
+		RefreshToken: grpcResp.Tokens.RefreshToken,
+		ExpiresIn:    int64(3600), // Default to 1 hour, could be calculated from expires_at
 	}
 }
+
+// convertCreateOrganizationData converts gRPC CreateOrganizationResponse to HTTP AuthData
+func (h *AuthHandler) convertCreateOrganizationData(grpcResp *authpb.CreateOrganizationResponse) *AuthData {
+	if grpcResp == nil || grpcResp.Tokens == nil {
+		return nil
+	}
+
+	return &AuthData{
+		User:         h.convertUser(grpcResp.AdminUser),
+		AccessToken:  grpcResp.Tokens.AccessToken,
+		RefreshToken: grpcResp.Tokens.RefreshToken,
+		ExpiresIn:    int64(3600), // Default to 1 hour, could be calculated from expires_at
+	}
+}
+
+// convertAuthData is a legacy method that's no longer used
+// The new auth service uses different response structures handled by
+// convertAuthenticateData and convertCreateOrganizationData methods
 
 // convertTokenPair converts gRPC TokenPair to HTTP TokenPair
 func (h *AuthHandler) convertTokenPair(grpcData *authpb.TokenPair) *TokenPair {
@@ -483,10 +517,19 @@ func (h *AuthHandler) convertTokenPair(grpcData *authpb.TokenPair) *TokenPair {
 		return nil
 	}
 
+	// Calculate expires_in from expires_at timestamp
+	expiresIn := int64(3600) // Default to 1 hour
+	if grpcData.ExpiresAt != nil {
+		expiresIn = grpcData.ExpiresAt.AsTime().Unix() - time.Now().Unix()
+		if expiresIn < 0 {
+			expiresIn = 0
+		}
+	}
+
 	return &TokenPair{
 		AccessToken:  grpcData.AccessToken,
 		RefreshToken: grpcData.RefreshToken,
-		ExpiresIn:    grpcData.ExpiresIn,
+		ExpiresIn:    expiresIn,
 	}
 }
 
@@ -505,11 +548,9 @@ func (h *AuthHandler) convertUser(grpcUser *authpb.User) User {
 		UpdatedAt: grpcUser.UpdatedAt.AsTime(),
 	}
 
-	// Handle optional email verified timestamp
-	if grpcUser.EmailVerifiedAt != nil {
-		emailVerifiedAt := grpcUser.EmailVerifiedAt.AsTime()
-		user.EmailVerifiedAt = &emailVerifiedAt
-	}
+	// The new User struct doesn't have EmailVerifiedAt field
+	// Email verification status is now handled through the is_verified boolean field
+	// which is already included in the User struct
 
 	return user
 }

@@ -47,11 +47,15 @@ func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
 		return nil, fmt.Errorf("failed to get user information")
 	}
 
-	if !resp.Success {
-		return nil, fmt.Errorf("failed to get user: %s", resp.Message)
+	if resp.Error != "" {
+		return nil, fmt.Errorf("failed to get user: %s", resp.Error)
 	}
 
-	return convertProtoUserToGraphQL(resp.Data), nil
+	if resp.User == nil {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	return convertProtoUserToGraphQL(resp.User), nil
 }
 
 // User is the resolver for the user field.
@@ -92,11 +96,15 @@ func (r *queryResolver) User(ctx context.Context, id string) (*model.User, error
 		return nil, fmt.Errorf("failed to get user information")
 	}
 
-	if !resp.Success {
+	if resp.Error != "" {
+		return nil, fmt.Errorf("failed to get user: %s", resp.Error)
+	}
+
+	if resp.User == nil {
 		return nil, fmt.Errorf("user not found")
 	}
 
-	return convertProtoUserToGraphQL(resp.Data), nil
+	return convertProtoUserToGraphQL(resp.User), nil
 }
 
 // Users is the resolver for the users field.

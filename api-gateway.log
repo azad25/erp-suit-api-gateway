@@ -1,0 +1,29 @@
+2025/08/04 14:50:45 Warning: Failed to initialize Kafka producer: failed to create Kafka producer: dial tcp: lookup kafka on 127.0.0.53:53: server misbehaving
+2025/08/04 14:50:45 Continuing without Kafka producer...
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /health                   --> erp-api-gateway/internal/server.(*Server).healthCheck-fm (8 handlers)
+[GIN-debug] GET    /ready                    --> erp-api-gateway/internal/server.(*Server).readinessCheck-fm (8 handlers)
+[GIN-debug] GET    /metrics                  --> erp-api-gateway/internal/server.(*Server).metricsHandler-fm (8 handlers)
+[GIN-debug] GET    /ws                       --> erp-api-gateway/internal/server.(*Server).handleWebSocket-fm (8 handlers)
+[GIN-debug] POST   /graphql                  --> erp-api-gateway/internal/server.(*Server).setupGraphQLRoutes.(*GraphQLHandler).ServeHTTP.func2 (9 handlers)
+[GIN-debug] GET    /graphql                  --> erp-api-gateway/internal/server.(*Server).setupGraphQLRoutes.(*GraphQLHandler).PlaygroundHandler.func3 (8 handlers)
+[GIN-debug] POST   /auth/login/              --> erp-api-gateway/api/rest.(*AuthHandler).Login-fm (8 handlers)
+[GIN-debug] POST   /auth/register/           --> erp-api-gateway/api/rest.(*AuthHandler).Register-fm (8 handlers)
+[GIN-debug] POST   /auth/refresh/            --> erp-api-gateway/api/rest.(*AuthHandler).RefreshToken-fm (8 handlers)
+[GIN-debug] POST   /auth/logout/             --> erp-api-gateway/api/rest.(*AuthHandler).Logout-fm (9 handlers)
+[GIN-debug] GET    /auth/me/                 --> erp-api-gateway/api/rest.(*AuthHandler).GetCurrentUser-fm (9 handlers)
+[GIN-debug] POST   /api/v1/auth/login/       --> erp-api-gateway/api/rest.(*AuthHandler).Login-fm (8 handlers)
+[GIN-debug] POST   /api/v1/auth/register/    --> erp-api-gateway/api/rest.(*AuthHandler).Register-fm (8 handlers)
+[GIN-debug] POST   /api/v1/auth/refresh/     --> erp-api-gateway/api/rest.(*AuthHandler).RefreshToken-fm (8 handlers)
+[GIN-debug] POST   /api/v1/auth/logout/      --> erp-api-gateway/api/rest.(*AuthHandler).Logout-fm (9 handlers)
+[GIN-debug] GET    /api/v1/auth/me/          --> erp-api-gateway/api/rest.(*AuthHandler).GetCurrentUser-fm (9 handlers)
+2025/08/04 14:50:45 Starting ERP API Gateway on 0.0.0.0:8000
+Starting server on 0.0.0.0:8000
+2025/08/04 14:50:45 Server error: failed to start server: listen tcp 0.0.0.0:8000: bind: address already in use
+2025/08/04 14:50:45 Context cancelled
+2025/08/04 14:50:45 Shutting down gracefully...
+Shutting down server...
+2025/08/04 14:50:45 Shutdown complete

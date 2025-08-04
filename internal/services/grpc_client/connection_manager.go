@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/metadata"
 )
 
 // ConnectionManager manages gRPC connections with pooling and lifecycle management
@@ -31,6 +32,7 @@ type ConnectionConfig struct {
 	ConnectTimeout     time.Duration
 	EnableHealthCheck  bool
 	HealthCheckInterval time.Duration
+	ServiceKey         string
 }
 
 // DefaultConnectionConfig returns a default configuration
@@ -113,6 +115,11 @@ func (cm *ConnectionManager) createConnection(ctx context.Context, address strin
 			grpc.MaxCallRecvMsgSize(4*1024*1024), // 4MB
 			grpc.MaxCallSendMsgSize(4*1024*1024), // 4MB
 		),
+	}
+	
+	// Add service key interceptor if service key is configured
+	if cm.config.ServiceKey != "" {
+		opts = append(opts, grpc.WithUnaryInterceptor(cm.serviceKeyInterceptor))
 	}
 
 	// Create connection
@@ -213,6 +220,22 @@ func (cm *ConnectionManager) GetConnectionStats() map[string]ConnectionStats {
 	}
 
 	return stats
+}
+
+// serviceKeyInterceptor adds service key header to outgoing gRPC requests
+func (cm *ConnectionManager) serviceKeyInterceptor(
+	ctx context.Context,
+	method string,
+	req, reply interface{},
+	cc *grpc.ClientConn,
+	invoker grpc.UnaryInvoker,
+	opts ...grpc.CallOption,
+) error {
+	// Add service key header to metadata
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-service-key", cm.config.ServiceKey)
+	
+	// Call the original method
+	return invoker(ctx, method, req, reply, cc, opts...)
 }
 
 // ConnectionStats holds statistics for a connection

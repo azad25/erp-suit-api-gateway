@@ -1,10 +1,13 @@
-# Multi-stage Dockerfile for ERP API Gateway
-# Optimized for production deployment with minimal image size
+# This Dockerfile is for the ERP API Gateway.
+# It assumes that all necessary code, including generated protobuf and gqlgen files,
+# has been created on the host machine before the docker build command is run.
 
-# Build stage
+# ==================================
+# Build Stage
+# ==================================
 FROM golang:1.23-alpine AS builder
 
-# Install build dependencies
+# Install necessary build dependencies
 RUN apk add --no-cache \
     git \
     ca-certificates \
@@ -13,69 +16,82 @@ RUN apk add --no-cache \
     gcc \
     musl-dev
 
-# Set working directory
+# Set working directory inside the container
 WORKDIR /app
 
-# Copy go mod files first for better caching
+# Copy go mod files first to leverage Docker's cache
 COPY go.mod go.sum ./
 
-# Download dependencies
+# Download dependencies before copying the rest of the code
+# This step is much faster on subsequent builds if dependencies haven't changed.
 RUN go mod download && go mod verify
 
-# Copy source code
+# Copy all the source code, including the already generated files
 COPY . .
 
-# Build the application
+# Build the final static application binary
+# This assumes that the generated files (e.g., auth.pb.go, models_gen.go)
+# exist in your local project directory before this build begins.
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags='-w -s -extldflags "-static"' \
     -a -installsuffix cgo \
     -o gateway \
     cmd/server/main.go
 
-# Development stage (for local development)
+# ==================================
+# Development Stage
+# ==================================
 FROM golang:1.23-alpine AS development
 
-RUN apk add --no-cache git ca-certificates tzdata curl
-
-WORKDIR /app
+# Install runtime dependencies for a dev environment
+RUN apk add --no-cache git ca-certificates tzdata protobuf-dev curl
 
 # Install air for hot reloading (compatible with Go 1.23)
 RUN go install github.com/cosmtrek/air@v1.49.0
 
+WORKDIR /app
+
+# Copy go mod files and download dependencies
 COPY go.mod go.sum ./
 RUN go mod download
 
+# Create non-root user and directories
+RUN mkdir -p /go/pkg/mod/cache /go/cache && \
+    chown -R 1000:1000 /go /app
+USER 1000
+
+# Copy all source code
 COPY . .
 
 EXPOSE 8000
 
+# Use 'air' for hot reloading
 CMD ["air", "-c", ".air.toml"]
 
-# Production stage
+# ==================================
+# Production Stage
+# ==================================
 FROM scratch AS production
 
-# Copy certificates and timezone data from builder
+# Copy necessary files from the builder stage for a minimal image
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
-
-# Copy the binary
 COPY --from=builder /app/gateway /gateway
-
-# Copy configuration files
 COPY --from=builder /app/config.yaml /app/config.yaml
 
-# Create non-root user
+# Run as a non-root user
 USER 65534:65534
 
-# Expose port
+# Expose the application port
 EXPOSE 8000
 
-# Health check
+# Health check to ensure the service is responsive
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD ["/gateway", "healthcheck"] || exit 1
 
-# Set entrypoint
+# Default command to run the binary
 ENTRYPOINT ["/gateway"]
-
-# Default command
 CMD ["serve"]
+# ==================================
+# End of Dockerfile
+# ==================================

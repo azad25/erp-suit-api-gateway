@@ -14,8 +14,8 @@ import (
 	"time"
 )
 
-// Login is the resolver for the login field.
-func (r *mutationResolver) Login(ctx context.Context, input model.LoginInput) (*model.AuthResponse, error) {
+// Authenticate is the resolver for the login field.
+func (r *mutationResolver) Authenticate(ctx context.Context, input model.LoginInput) (*model.AuthResponse, error) {
 	// Call auth service via gRPC
 	authClient, err := r.GRPCClient.AuthService(ctx)
 	if err != nil {
@@ -26,7 +26,7 @@ func (r *mutationResolver) Login(ctx context.Context, input model.LoginInput) (*
 		return nil, fmt.Errorf("authentication service unavailable")
 	}
 
-	resp, err := authClient.Login(ctx, &authpb.LoginRequest{
+	resp, err := authClient.Authenticate(ctx, &authpb.AuthenticateRequest{
 		Email:      input.Email,
 		Password:   input.Password,
 		RememberMe: input.RememberMe != nil && *input.RememberMe,
@@ -42,41 +42,41 @@ func (r *mutationResolver) Login(ctx context.Context, input model.LoginInput) (*
 
 	if !resp.Success {
 		r.Logger.Info("Login failed", map[string]interface{}{
-			"email":   input.Email,
-			"message": resp.Message,
+			"email": input.Email,
+			"error": resp.Error,
 		})
-		return nil, fmt.Errorf("login failed: %s", resp.Message)
+		return nil, fmt.Errorf("login failed: %s", resp.Error)
 	}
 
 	// Publish login event to Kafka
 	go func() {
 		event := interfaces.Event{
 			Type:   "user.logged_in",
-			UserID: resp.Data.User.Id,
+			UserID: resp.User.Id,
 			Data: map[string]interface{}{
-				"email":      resp.Data.User.Email,
+				"email":      resp.User.Email,
 				"login_time": time.Now(),
 			},
 			Timestamp: time.Now(),
 		}
-		if err := r.KafkaProducer.PublishUserEvent(context.Background(), resp.Data.User.Id, event); err != nil {
+		if err := r.KafkaProducer.PublishUserEvent(context.Background(), resp.User.Id, event); err != nil {
 			r.Logger.Error("Failed to publish login event", map[string]interface{}{
 				"error":   err,
-				"user_id": resp.Data.User.Id,
+				"user_id": resp.User.Id,
 			})
 		}
 	}()
 
 	return &model.AuthResponse{
-		User:         convertProtoUserToGraphQL(resp.Data.User),
-		AccessToken:  resp.Data.AccessToken,
-		RefreshToken: resp.Data.RefreshToken,
-		ExpiresIn:    int(resp.Data.ExpiresIn),
+		User:         convertProtoUserToGraphQL(resp.User),
+		AccessToken:  resp.Tokens.AccessToken,
+		RefreshToken: resp.Tokens.RefreshToken,
+		ExpiresIn:    int(resp.Tokens.ExpiresAt.Seconds - time.Now().Unix()),
 	}, nil
 }
 
-// Register is the resolver for the register field.
-func (r *mutationResolver) Register(ctx context.Context, input model.RegisterInput) (*model.AuthResponse, error) {
+// CreateUser is the resolver for the register field.
+func (r *mutationResolver) CreateUser(ctx context.Context, input model.RegisterInput) (*model.AuthResponse, error) {
 	// Call auth service via gRPC
 	authClient, err := r.GRPCClient.AuthService(ctx)
 	if err != nil {
@@ -87,12 +87,11 @@ func (r *mutationResolver) Register(ctx context.Context, input model.RegisterInp
 		return nil, fmt.Errorf("authentication service unavailable")
 	}
 
-	resp, err := authClient.Register(ctx, &authpb.RegisterRequest{
-		FirstName:            input.FirstName,
-		LastName:             input.LastName,
-		Email:                input.Email,
-		Password:             input.Password,
-		PasswordConfirmation: input.Password, // GraphQL schema doesn't have confirmation field
+	resp, err := authClient.CreateUser(ctx, &authpb.CreateUserRequest{
+		FirstName: input.FirstName,
+		LastName:  input.LastName,
+		Email:     input.Email,
+		Password:  input.Password,
 	})
 
 	if err != nil {
@@ -105,43 +104,45 @@ func (r *mutationResolver) Register(ctx context.Context, input model.RegisterInp
 
 	if !resp.Success {
 		r.Logger.Info("Registration failed", map[string]interface{}{
-			"email":   input.Email,
-			"message": resp.Message,
+			"email": input.Email,
+			"error": resp.Error,
 		})
-		return nil, fmt.Errorf("registration failed: %s", resp.Message)
+		return nil, fmt.Errorf("registration failed: %s", resp.Error)
 	}
 
 	// Publish registration event to Kafka
 	go func() {
 		event := interfaces.Event{
 			Type:   "user.registered",
-			UserID: resp.Data.User.Id,
+			UserID: resp.User.Id,
 			Data: map[string]interface{}{
-				"email":             resp.Data.User.Email,
-				"first_name":        resp.Data.User.FirstName,
-				"last_name":         resp.Data.User.LastName,
+				"email":             resp.User.Email,
+				"first_name":        resp.User.FirstName,
+				"last_name":         resp.User.LastName,
 				"registration_time": time.Now(),
 			},
 			Timestamp: time.Now(),
 		}
-		if err := r.KafkaProducer.PublishUserEvent(context.Background(), resp.Data.User.Id, event); err != nil {
+		if err := r.KafkaProducer.PublishUserEvent(context.Background(), resp.User.Id, event); err != nil {
 			r.Logger.Error("Failed to publish registration event", map[string]interface{}{
 				"error":   err,
-				"user_id": resp.Data.User.Id,
+				"user_id": resp.User.Id,
 			})
 		}
 	}()
 
+	// Note: CreateUser doesn't return tokens, so we need to authenticate after registration
+	// For now, return a response without tokens - the client should call authenticate separately
 	return &model.AuthResponse{
-		User:         convertProtoUserToGraphQL(resp.Data.User),
-		AccessToken:  resp.Data.AccessToken,
-		RefreshToken: resp.Data.RefreshToken,
-		ExpiresIn:    int(resp.Data.ExpiresIn),
+		User:         convertProtoUserToGraphQL(resp.User),
+		AccessToken:  "", // CreateUser doesn't provide tokens
+		RefreshToken: "", // CreateUser doesn't provide tokens
+		ExpiresIn:    0,  // CreateUser doesn't provide tokens
 	}, nil
 }
 
 // Logout is the resolver for the logout field.
-func (r *mutationResolver) Logout(ctx context.Context) (*model.MutationResponse, error) {
+func (r *mutationResolver) RevokeToken(ctx context.Context) (*model.MutationResponse, error) {
 	// Get user ID from context
 	userID, exists := ctx.Value("user_id").(string)
 	if !exists {
@@ -150,10 +151,6 @@ func (r *mutationResolver) Logout(ctx context.Context) (*model.MutationResponse,
 			Message: "User not authenticated",
 		}, nil
 	}
-
-	// For logout, we would typically revoke the token
-	// This would require getting the token from the Authorization header
-	// For now, just log the logout event
 
 	// Publish logout event to Kafka
 	go func() {
@@ -205,20 +202,20 @@ func (r *mutationResolver) RefreshToken(ctx context.Context, refreshToken string
 		return nil, fmt.Errorf("authentication service unavailable")
 	}
 
-	if !resp.Success {
+	if resp.Error != "" {
 		r.Logger.Info("Token refresh failed", map[string]interface{}{
-			"message": resp.Message,
+			"error": resp.Error,
 		})
-		return nil, fmt.Errorf("token refresh failed: %s", resp.Message)
+		return nil, fmt.Errorf("token refresh failed: %s", resp.Error)
 	}
 
 	// For refresh token, we need to get user info separately
 	// since the refresh response only contains tokens
 	return &model.AuthResponse{
 		User:         &model.User{}, // Would need to fetch user info separately
-		AccessToken:  resp.Data.AccessToken,
-		RefreshToken: resp.Data.RefreshToken,
-		ExpiresIn:    int(resp.Data.ExpiresIn),
+		AccessToken:  resp.AccessToken,
+		RefreshToken: resp.RefreshToken,
+		ExpiresIn:    int(resp.ExpiresIn),
 	}, nil
 }
 
