@@ -72,6 +72,30 @@ grpc:
       timeout: "60s"
       interval: "10s"
 
+# GraphQL Gateway Integration
+graphql:
+  gateway_host: "graphql-gateway"
+  gateway_port: 4000
+  endpoint: "/graphql"
+  timeout: "30s"
+  enable_playground: true
+  enable_introspection: true
+
+# WebSocket Server Integration  
+websocket:
+  server_host: "websocket-server"
+  server_port: 3001
+  endpoint: "/socket.io"
+  timeout: "30s"
+  enable_cors: true
+
+# Health Check Optimization
+health:
+  cache_timeout: "30s"        # Cache health status for 30 seconds
+  check_interval: "60s"       # Background checks every 60 seconds
+  max_concurrent_checks: 3    # Max 3 concurrent health checks
+  http_timeout: "5s"          # HTTP health check timeout
+
 jwt:
   secret: "your-super-secret-jwt-key-change-in-production"  # Shared secret for HS256
   public_key_path: ""  # Path to RSA public key file (not used with HS256)

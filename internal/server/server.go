@@ -14,8 +14,10 @@ import (
 	"erp-api-gateway/api/rest"
 	"erp-api-gateway/api/ws"
 	"erp-api-gateway/internal/config"
+	"erp-api-gateway/internal/health"
 	"erp-api-gateway/internal/interfaces"
 	"erp-api-gateway/internal/logging"
+	"erp-api-gateway/internal/proxy"
 	"erp-api-gateway/internal/services"
 	"erp-api-gateway/internal/services/grpc_client"
 	"erp-api-gateway/middleware"
@@ -34,6 +36,9 @@ type Server struct {
 	policyEngine   interfaces.PolicyEngine
 	wsHandler      *ws.Handler
 	graphqlHandler *graphql.GraphQLHandler
+	graphqlProxy   *proxy.GraphQLProxy
+	websocketProxy *proxy.WebSocketProxy
+	healthManager  *health.HealthManager
 }
 
 // Dependencies holds all the dependencies needed by the server
@@ -69,7 +74,7 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 		)
 	}
 	
-	// Create GraphQL handler
+	// Create GraphQL handler (local)
 	graphqlHandler := graphql.NewGraphQLHandler(
 		cfg,
 		logging.NewNoOpLogger(),
@@ -77,6 +82,41 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 		deps.RedisClient,
 		deps.KafkaProducer,
 	)
+	
+	// Create GraphQL proxy (to infrastructure GraphQL Gateway)
+	graphqlProxy := proxy.NewGraphQLProxy(&cfg.GraphQL, logging.NewSimpleLogger(deps.Logger))
+	
+	// Create WebSocket proxy (to infrastructure WebSocket Server)
+	websocketProxy := proxy.NewWebSocketProxy(&cfg.WebSocket, logging.NewSimpleLogger(deps.Logger))
+	
+	// Create optimized health manager
+	healthManager := health.NewHealthManager(logging.NewSimpleLogger(deps.Logger))
+	
+	// Register health checkers
+	if deps.RedisClient != nil {
+		healthManager.RegisterChecker(health.NewRedisHealthChecker(deps.RedisClient))
+	}
+	
+	if deps.GRPCClient != nil {
+		healthManager.RegisterChecker(health.NewGRPCHealthChecker(deps.GRPCClient, "auth"))
+	}
+	
+	if deps.KafkaProducer != nil {
+		healthManager.RegisterChecker(health.NewKafkaHealthChecker(deps.KafkaProducer))
+	}
+	
+	// Register HTTP health checkers for infrastructure services
+	healthManager.RegisterChecker(health.NewHTTPHealthChecker(
+		"graphql_gateway",
+		fmt.Sprintf("http://%s:%d/health", cfg.GraphQL.GatewayHost, cfg.GraphQL.GatewayPort),
+		5*time.Second,
+	))
+	
+	healthManager.RegisterChecker(health.NewHTTPHealthChecker(
+		"websocket_server", 
+		fmt.Sprintf("http://%s:%d/health", cfg.WebSocket.ServerHost, cfg.WebSocket.ServerPort),
+		5*time.Second,
+	))
 	
 	server := &Server{
 		config:         cfg,
@@ -89,6 +129,9 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 		policyEngine:   deps.PolicyEngine,
 		wsHandler:      wsHandler,
 		graphqlHandler: graphqlHandler,
+		graphqlProxy:   graphqlProxy,
+		websocketProxy: websocketProxy,
+		healthManager:  healthManager,
 		httpServer: &http.Server{
 			Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
 			Handler:      router,
@@ -105,6 +148,9 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 
 // Start starts the HTTP server
 func (s *Server) Start() error {
+	// Start health manager
+	s.healthManager.Start()
+	
 	fmt.Printf("Starting server on %s\n", s.httpServer.Addr)
 	
 	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -117,6 +163,9 @@ func (s *Server) Start() error {
 // Shutdown gracefully shuts down the server
 func (s *Server) Shutdown(ctx context.Context) error {
 	fmt.Println("Shutting down server...")
+	
+	// Stop health manager
+	s.healthManager.Stop()
 	
 	// Close WebSocket handler
 	if s.wsHandler != nil {
@@ -214,12 +263,17 @@ func (s *Server) setupRoutes() {
 	// Health check endpoints (no authentication required)
 	s.router.GET("/health", s.healthCheck)
 	s.router.GET("/ready", s.readinessCheck)
+	s.router.GET("/health/detailed", s.detailedHealthCheck)
 	
 	// Metrics endpoint (no authentication required)
 	s.router.GET("/metrics", s.metricsHandler)
 	
-	// WebSocket endpoint (authentication handled in WebSocket handler)
-	s.router.GET("/ws", s.handleWebSocket)
+	// WebSocket endpoints
+	// Option 1: Use infrastructure WebSocket Server (recommended)
+	s.router.GET("/ws", s.optionalAuth(), s.websocketProxy.ProxyConnection)
+	
+	// Option 2: Use local WebSocket handler (fallback)
+	s.router.GET("/ws/local", s.handleWebSocket)
 	
 	// GraphQL endpoints
 	s.setupGraphQLRoutes()
@@ -230,12 +284,14 @@ func (s *Server) setupRoutes() {
 
 // setupGraphQLRoutes sets up GraphQL routes
 func (s *Server) setupGraphQLRoutes() {
-	// GraphQL endpoint with optional authentication
-	s.router.POST("/graphql", s.optionalAuth(), s.graphqlHandler.ServeHTTP())
+	// Option 1: Use infrastructure GraphQL Gateway (recommended)
+	s.router.POST("/graphql", s.optionalAuth(), s.graphqlProxy.ProxyRequest)
+	s.router.GET("/graphql", s.graphqlProxy.ProxyPlayground)
 	
-	// GraphQL Playground (development only)
+	// Option 2: Use local GraphQL handler (fallback)
+	s.router.POST("/graphql/local", s.optionalAuth(), s.graphqlHandler.ServeHTTP())
 	if s.config.IsDevelopment() {
-		s.router.GET("/graphql", s.graphqlHandler.PlaygroundHandler())
+		s.router.GET("/graphql/local", s.graphqlHandler.PlaygroundHandler())
 	}
 }
 
@@ -399,9 +455,9 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 	}
 }
 
-// healthCheck handles health check requests
+// healthCheck handles health check requests (fast, no dependency checks)
 func (s *Server) healthCheck(c *gin.Context) {
-	// Basic health check
+	// Basic health check - just confirms the service is running
 	health := gin.H{
 		"status":    "healthy",
 		"timestamp": time.Now().Unix(),
@@ -412,58 +468,108 @@ func (s *Server) healthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, health)
 }
 
-// readinessCheck handles readiness check requests
+// readinessCheck handles readiness check requests (fast, uses cached health status)
 func (s *Server) readinessCheck(c *gin.Context) {
-	ctx := c.Request.Context()
-	ready := true
-	checks := make(map[string]string)
+	// Get cached health statuses (no blocking calls)
+	statuses := s.healthManager.GetAllStatuses()
+	ready := s.healthManager.IsHealthy()
 	
-	// Check Redis connection
-	if s.redisClient != nil {
-		if err := s.redisClient.Ping(ctx); err != nil {
-			ready = false
-			checks["redis"] = "unhealthy: " + err.Error()
-		} else {
-			checks["redis"] = "healthy"
+	// Convert to response format
+	checks := make(map[string]interface{})
+	for name, status := range statuses {
+		checks[name] = map[string]interface{}{
+			"status":     status.Status,
+			"last_check": status.LastCheck.Unix(),
+			"latency_ms": status.Latency,
+		}
+		
+		if status.Error != "" {
+			checks[name].(map[string]interface{})["error"] = status.Error
 		}
 	}
 	
-	// Check gRPC services
-	if s.grpcClient != nil {
-		// Check Auth Service
-		if authClient, err := s.grpcClient.AuthService(ctx); err != nil {
-			ready = false
-			checks["auth_service"] = "unhealthy: " + err.Error()
-		} else if authClient != nil {
-			checks["auth_service"] = "healthy"
-		}
-	}
-	
-	// Check Kafka producer
-	if s.kafkaProducer != nil {
-		if err := s.kafkaProducer.HealthCheck(ctx); err != nil {
-			ready = false
-			checks["kafka"] = "unhealthy: " + err.Error()
-		} else {
-			checks["kafka"] = "healthy"
-		}
-	} else {
-		checks["kafka"] = "not_configured"
-	}
-	
-	status := "ready"
+	statusText := "ready"
 	statusCode := http.StatusOK
 	if !ready {
-		status = "not_ready"
+		statusText = "not_ready"
 		statusCode = http.StatusServiceUnavailable
 	}
 	
 	response := gin.H{
-		"status":    status,
+		"status":    statusText,
 		"timestamp": time.Now().Unix(),
 		"checks":    checks,
 		"service":   "erp-api-gateway",
 		"version":   "1.0.0",
+	}
+	
+	c.JSON(statusCode, response)
+}
+
+// detailedHealthCheck provides detailed health information with optional force refresh
+func (s *Server) detailedHealthCheck(c *gin.Context) {
+	// Check if force refresh is requested
+	forceRefresh := c.Query("force") == "true"
+	
+	var statuses map[string]*health.HealthStatus
+	
+	if forceRefresh {
+		// Force fresh health checks (use sparingly)
+		statuses = make(map[string]*health.HealthStatus)
+		
+		// Get list of registered checkers and force check each
+		allStatuses := s.healthManager.GetAllStatuses()
+		for serviceName := range allStatuses {
+			statuses[serviceName] = s.healthManager.ForceCheck(serviceName)
+		}
+	} else {
+		// Use cached statuses
+		statuses = s.healthManager.GetAllStatuses()
+	}
+	
+	// Calculate overall health
+	healthy := 0
+	unhealthy := 0
+	stale := 0
+	
+	for _, status := range statuses {
+		switch status.Status {
+		case "healthy":
+			healthy++
+		case "unhealthy":
+			unhealthy++
+		case "stale":
+			stale++
+		}
+	}
+	
+	overallStatus := "healthy"
+	if unhealthy > 0 {
+		overallStatus = "unhealthy"
+	} else if stale > 0 {
+		overallStatus = "degraded"
+	}
+	
+	response := gin.H{
+		"status":    overallStatus,
+		"timestamp": time.Now().Unix(),
+		"service":   "erp-api-gateway",
+		"version":   "1.0.0",
+		"summary": gin.H{
+			"healthy":   healthy,
+			"unhealthy": unhealthy,
+			"stale":     stale,
+			"total":     len(statuses),
+		},
+		"services":      statuses,
+		"force_refresh": forceRefresh,
+	}
+	
+	statusCode := http.StatusOK
+	if overallStatus == "unhealthy" {
+		statusCode = http.StatusServiceUnavailable
+	} else if overallStatus == "degraded" {
+		statusCode = http.StatusPartialContent
 	}
 	
 	c.JSON(statusCode, response)

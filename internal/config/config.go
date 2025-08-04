@@ -20,9 +20,11 @@ type Config struct {
 	Redis      RedisConfig          `yaml:"redis"`
 	Kafka      KafkaConfig          `yaml:"kafka"`
 	GRPC       GRPCConfig           `yaml:"grpc"`
+	GraphQL    GraphQLConfig        `yaml:"graphql"`
+	WebSocket  WebSocketConfig      `yaml:"websocket"`
+	Health     HealthConfig         `yaml:"health"`
 	JWT        JWTConfig            `yaml:"jwt"`
 	Logging    LoggingConfig        `yaml:"logging"`
-	WebSocket  WebSocketConfig      `yaml:"websocket"`
 	CircuitBreaker CircuitBreakerConfig `yaml:"circuit_breaker"`
 }
 
@@ -149,21 +151,48 @@ type ElasticsearchConfig struct {
 	IndexName string   `yaml:"index_name" json:"index_name" env:"ELASTICSEARCH_INDEX_NAME" validate:"required"`
 }
 
-// WebSocketConfig represents WebSocket configuration
-type WebSocketConfig struct {
-	ReadBufferSize       int           `yaml:"read_buffer_size" json:"read_buffer_size" env:"WS_READ_BUFFER_SIZE" validate:"min=1024"`
-	WriteBufferSize      int           `yaml:"write_buffer_size" json:"write_buffer_size" env:"WS_WRITE_BUFFER_SIZE" validate:"min=1024"`
-	HandshakeTimeout     time.Duration `yaml:"handshake_timeout" json:"handshake_timeout" env:"WS_HANDSHAKE_TIMEOUT"`
-	ReadTimeout          time.Duration `yaml:"read_timeout" json:"read_timeout" env:"WS_READ_TIMEOUT"`
-	WriteTimeout         time.Duration `yaml:"write_timeout" json:"write_timeout" env:"WS_WRITE_TIMEOUT"`
-	PongTimeout          time.Duration `yaml:"pong_timeout" json:"pong_timeout" env:"WS_PONG_TIMEOUT"`
-	PingPeriod           time.Duration `yaml:"ping_period" json:"ping_period" env:"WS_PING_PERIOD"`
-	MaxMessageSize       int64         `yaml:"max_message_size" json:"max_message_size" env:"WS_MAX_MESSAGE_SIZE" validate:"min=1024"`
-	MaxConnections       int           `yaml:"max_connections" json:"max_connections" env:"WS_MAX_CONNECTIONS" validate:"min=1"`
-	AllowedOrigins       []string      `yaml:"allowed_origins" json:"allowed_origins" env:"WS_ALLOWED_ORIGINS"`
-	EnableCompression    bool          `yaml:"enable_compression" json:"enable_compression" env:"WS_ENABLE_COMPRESSION"`
-	CompressionLevel     int           `yaml:"compression_level" json:"compression_level" env:"WS_COMPRESSION_LEVEL" validate:"min=-1,max=9"`
+// GraphQLConfig represents GraphQL Gateway configuration
+type GraphQLConfig struct {
+	GatewayHost         string        `yaml:"gateway_host" json:"gateway_host" env:"GRAPHQL_GATEWAY_HOST" validate:"required"`
+	GatewayPort         int           `yaml:"gateway_port" json:"gateway_port" env:"GRAPHQL_GATEWAY_PORT" validate:"min=1,max=65535"`
+	Endpoint            string        `yaml:"endpoint" json:"endpoint" env:"GRAPHQL_ENDPOINT"`
+	Timeout             time.Duration `yaml:"timeout" json:"timeout" env:"GRAPHQL_TIMEOUT"`
+	EnablePlayground    bool          `yaml:"enable_playground" json:"enable_playground" env:"GRAPHQL_ENABLE_PLAYGROUND"`
+	EnableIntrospection bool          `yaml:"enable_introspection" json:"enable_introspection" env:"GRAPHQL_ENABLE_INTROSPECTION"`
 }
+
+// WebSocketConfig represents WebSocket Server configuration  
+type WebSocketConfig struct {
+	ServerHost  string        `yaml:"server_host" json:"server_host" env:"WEBSOCKET_SERVER_HOST" validate:"required"`
+	ServerPort  int           `yaml:"server_port" json:"server_port" env:"WEBSOCKET_SERVER_PORT" validate:"min=1,max=65535"`
+	Endpoint    string        `yaml:"endpoint" json:"endpoint" env:"WEBSOCKET_ENDPOINT"`
+	Timeout     time.Duration `yaml:"timeout" json:"timeout" env:"WEBSOCKET_TIMEOUT"`
+	EnableCORS  bool          `yaml:"enable_cors" json:"enable_cors" env:"WEBSOCKET_ENABLE_CORS"`
+}
+
+// HealthConfig represents health check optimization configuration
+type HealthConfig struct {
+	CacheTimeout        time.Duration `yaml:"cache_timeout" json:"cache_timeout" env:"HEALTH_CACHE_TIMEOUT"`
+	CheckInterval       time.Duration `yaml:"check_interval" json:"check_interval" env:"HEALTH_CHECK_INTERVAL"`
+	MaxConcurrentChecks int           `yaml:"max_concurrent_checks" json:"max_concurrent_checks" env:"HEALTH_MAX_CONCURRENT_CHECKS"`
+	HTTPTimeout         time.Duration `yaml:"http_timeout" json:"http_timeout" env:"HEALTH_HTTP_TIMEOUT"`
+}
+
+// WebSocketConfig represents WebSocket configuration
+// type WebSocketConfig struct {
+// 	ReadBufferSize       int           `yaml:"read_buffer_size" json:"read_buffer_size" env:"WS_READ_BUFFER_SIZE" validate:"min=1024"`
+// 	WriteBufferSize      int           `yaml:"write_buffer_size" json:"write_buffer_size" env:"WS_WRITE_BUFFER_SIZE" validate:"min=1024"`
+// 	HandshakeTimeout     time.Duration `yaml:"handshake_timeout" json:"handshake_timeout" env:"WS_HANDSHAKE_TIMEOUT"`
+// 	ReadTimeout          time.Duration `yaml:"read_timeout" json:"read_timeout" env:"WS_READ_TIMEOUT"`
+// 	WriteTimeout         time.Duration `yaml:"write_timeout" json:"write_timeout" env:"WS_WRITE_TIMEOUT"`
+// 	PongTimeout          time.Duration `yaml:"pong_timeout" json:"pong_timeout" env:"WS_PONG_TIMEOUT"`
+// 	PingPeriod           time.Duration `yaml:"ping_period" json:"ping_period" env:"WS_PING_PERIOD"`
+// 	MaxMessageSize       int64         `yaml:"max_message_size" json:"max_message_size" env:"WS_MAX_MESSAGE_SIZE" validate:"min=1024"`
+// 	MaxConnections       int           `yaml:"max_connections" json:"max_connections" env:"WS_MAX_CONNECTIONS" validate:"min=1"`
+// 	AllowedOrigins       []string      `yaml:"allowed_origins" json:"allowed_origins" env:"WS_ALLOWED_ORIGINS"`
+// 	EnableCompression    bool          `yaml:"enable_compression" json:"enable_compression" env:"WS_ENABLE_COMPRESSION"`
+// 	CompressionLevel     int           `yaml:"compression_level" json:"compression_level" env:"WS_COMPRESSION_LEVEL" validate:"min=-1,max=9"`
+// }
 
 
 // Load loads configuration from file and environment variables
