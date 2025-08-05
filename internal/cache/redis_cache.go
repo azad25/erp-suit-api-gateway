@@ -2,90 +2,193 @@ package cache
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"erp-api-gateway/internal/config"
-	"erp-api-gateway/internal/interfaces"
 )
 
-// RedisCache implements the CacheService interface using Redis
-type RedisCache struct {
+// CacheManager handles Redis caching operations
+type CacheManager struct {
 	client *redis.Client
+	ctx    context.Context
 }
 
-// NewRedisCache creates a new Redis cache instance
-func NewRedisCache(cfg *config.RedisConfig) *RedisCache {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:         fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
-		Password:     cfg.Password,
-		DB:           cfg.DB,
-		PoolSize:     cfg.PoolSize,
-		MinIdleConns: cfg.MinIdleConns,
-		DialTimeout:  cfg.DialTimeout,
-		ReadTimeout:  cfg.ReadTimeout,
-		WriteTimeout: cfg.WriteTimeout,
-	})
+// CacheConfig holds cache configuration
+type CacheConfig struct {
+	DefaultTTL time.Duration
+	MaxRetries int
+}
 
-	return &RedisCache{
-		client: rdb,
+// CacheItem represents a cached item with metadata
+type CacheItem struct {
+	Data      interface{} `json:"data"`
+	Timestamp int64       `json:"timestamp"`
+	TTL       int64       `json:"ttl"`
+	Version   string      `json:"version,omitempty"`
+}
+
+// NewCacheManager creates a new cache manager
+func NewCacheManager(client *redis.Client) *CacheManager {
+	return &CacheManager{
+		client: client,
+		ctx:    context.Background(),
 	}
 }
 
-// Get retrieves a value from the cache
-func (r *RedisCache) Get(ctx context.Context, key string) ([]byte, error) {
-	val, err := r.client.Get(ctx, key).Result()
+// Set stores data in cache with TTL
+func (c *CacheManager) Set(key string, data interface{}, ttl time.Duration) error {
+	item := CacheItem{
+		Data:      data,
+		Timestamp: time.Now().Unix(),
+		TTL:       int64(ttl.Seconds()),
+	}
+
+	jsonData, err := json.Marshal(item)
 	if err != nil {
-		if err == redis.Nil {
-			return nil, interfaces.ErrCacheKeyNotFound
-		}
-		return nil, err
+		return fmt.Errorf("failed to marshal cache item: %w", err)
 	}
-	return []byte(val), nil
+
+	return c.client.Set(c.ctx, key, jsonData, ttl).Err()
 }
 
-// Set stores a value in the cache with TTL
-func (r *RedisCache) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
-	return r.client.Set(ctx, key, value, ttl).Err()
-}
-
-// Delete removes a key from the cache
-func (r *RedisCache) Delete(ctx context.Context, key string) error {
-	return r.client.Del(ctx, key).Err()
-}
-
-// Exists checks if a key exists in the cache
-func (r *RedisCache) Exists(ctx context.Context, key string) (bool, error) {
-	count, err := r.client.Exists(ctx, key).Result()
+// Get retrieves data from cache
+func (c *CacheManager) Get(key string, dest interface{}) (bool, error) {
+	val, err := c.client.Get(c.ctx, key).Result()
+	if err == redis.Nil {
+		return false, nil // Cache miss
+	}
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to get cache item: %w", err)
 	}
-	return count > 0, nil
+
+	var item CacheItem
+	if err := json.Unmarshal([]byte(val), &item); err != nil {
+		return false, fmt.Errorf("failed to unmarshal cache item: %w", err)
+	}
+
+	// Check if cache is still valid
+	if time.Now().Unix()-item.Timestamp > item.TTL {
+		c.Delete(key) // Clean up expired cache
+		return false, nil
+	}
+
+	// Marshal and unmarshal to convert to destination type
+	dataBytes, err := json.Marshal(item.Data)
+	if err != nil {
+		return false, fmt.Errorf("failed to marshal cache data: %w", err)
+	}
+
+	if err := json.Unmarshal(dataBytes, dest); err != nil {
+		return false, fmt.Errorf("failed to unmarshal to destination: %w", err)
+	}
+
+	return true, nil
 }
 
-// SetNX sets a key only if it doesn't exist
-func (r *RedisCache) SetNX(ctx context.Context, key string, value []byte, ttl time.Duration) (bool, error) {
-	return r.client.SetNX(ctx, key, value, ttl).Result()
+// Delete removes item from cache
+func (c *CacheManager) Delete(key string) error {
+	return c.client.Del(c.ctx, key).Err()
 }
 
-// Increment increments a key's value
-func (r *RedisCache) Increment(ctx context.Context, key string) (int64, error) {
-	return r.client.Incr(ctx, key).Result()
+// DeletePattern removes all keys matching pattern
+func (c *CacheManager) DeletePattern(pattern string) error {
+	keys, err := c.client.Keys(c.ctx, pattern).Result()
+	if err != nil {
+		return err
+	}
+
+	if len(keys) > 0 {
+		return c.client.Del(c.ctx, keys...).Err()
+	}
+
+	return nil
 }
 
-// Expire sets a TTL on an existing key
-func (r *RedisCache) Expire(ctx context.Context, key string, ttl time.Duration) error {
-	return r.client.Expire(ctx, key, ttl).Err()
+// Exists checks if key exists in cache
+func (c *CacheManager) Exists(key string) (bool, error) {
+	count, err := c.client.Exists(c.ctx, key).Result()
+	return count > 0, err
 }
 
-// Close closes the Redis connection
-func (r *RedisCache) Close() error {
-	return r.client.Close()
+// SetWithVersion stores data with version for cache invalidation
+func (c *CacheManager) SetWithVersion(key string, data interface{}, ttl time.Duration, version string) error {
+	item := CacheItem{
+		Data:      data,
+		Timestamp: time.Now().Unix(),
+		TTL:       int64(ttl.Seconds()),
+		Version:   version,
+	}
+
+	jsonData, err := json.Marshal(item)
+	if err != nil {
+		return fmt.Errorf("failed to marshal cache item: %w", err)
+	}
+
+	return c.client.Set(c.ctx, key, jsonData, ttl).Err()
 }
 
-// Ping tests the Redis connection
-func (r *RedisCache) Ping(ctx context.Context) error {
-	return r.client.Ping(ctx).Err()
+// GetWithVersion retrieves data and checks version
+func (c *CacheManager) GetWithVersion(key string, dest interface{}, expectedVersion string) (bool, error) {
+	val, err := c.client.Get(c.ctx, key).Result()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to get cache item: %w", err)
+	}
+
+	var item CacheItem
+	if err := json.Unmarshal([]byte(val), &item); err != nil {
+		return false, fmt.Errorf("failed to unmarshal cache item: %w", err)
+	}
+
+	// Check version mismatch
+	if item.Version != "" && expectedVersion != "" && item.Version != expectedVersion {
+		c.Delete(key) // Invalidate outdated cache
+		return false, nil
+	}
+
+	// Check TTL
+	if time.Now().Unix()-item.Timestamp > item.TTL {
+		c.Delete(key)
+		return false, nil
+	}
+
+	dataBytes, err := json.Marshal(item.Data)
+	if err != nil {
+		return false, fmt.Errorf("failed to marshal cache data: %w", err)
+	}
+
+	if err := json.Unmarshal(dataBytes, dest); err != nil {
+		return false, fmt.Errorf("failed to unmarshal to destination: %w", err)
+	}
+
+	return true, nil
 }
 
+// Cache key generators
+func UserCacheKey(userID string) string {
+	return fmt.Sprintf("user:profile:%s", userID)
+}
+
+func UserPermissionsCacheKey(userID string) string {
+	return fmt.Sprintf("user:permissions:%s", userID)
+}
+
+func SessionCacheKey(sessionID string) string {
+	return fmt.Sprintf("session:%s", sessionID)
+}
+
+func ConfigCacheKey() string {
+	return "system:config"
+}
+
+func DashboardMetricsCacheKey(userID string) string {
+	return fmt.Sprintf("dashboard:metrics:%s", userID)
+}
+
+func QueryCacheKey(query string, params ...interface{}) string {
+	return fmt.Sprintf("query:%x", fmt.Sprintf("%s:%v", query, params))
+}
