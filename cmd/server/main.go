@@ -23,8 +23,8 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Initialize logger
-	logger, err := logging.NewElasticLogger(&cfg.Logging)
+	// Initialize integrated logger (Elasticsearch + Kafka)
+	logger, err := logging.NewKafkaLoggerIntegration(&cfg.Logging, &cfg.Kafka)
 	if err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}

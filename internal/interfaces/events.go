@@ -10,6 +10,7 @@ type EventPublisher interface {
 	PublishEvent(ctx context.Context, event Event) error
 	PublishUserEvent(ctx context.Context, userID string, event Event) error
 	PublishBatch(ctx context.Context, events []Event) error
+	HealthCheck(ctx context.Context) error
 	Close() error
 }
 

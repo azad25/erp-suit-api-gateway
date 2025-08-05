@@ -2,12 +2,9 @@ package proxy
 
 import (
 	"bytes"
-	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"erp-api-gateway/internal/config"
