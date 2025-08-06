@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"your-project/internal/cache"
+	"erp-api-gateway/internal/cache"
 )
 
 // CacheMiddleware provides HTTP response caching

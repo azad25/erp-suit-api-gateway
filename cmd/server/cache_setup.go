@@ -8,10 +8,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
-	"your-project/internal/cache"
-	"your-project/internal/handlers"
-	"your-project/internal/middleware"
-	"your-project/internal/services"
+	"erp-api-gateway/internal/cache"
+	"erp-api-gateway/internal/handlers"
+	"erp-api-gateway/internal/middleware"
+	"erp-api-gateway/internal/services"
 )
 
 // CacheSetup handles cache initialization and routing

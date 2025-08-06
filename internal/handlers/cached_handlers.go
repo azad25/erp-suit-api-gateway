@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"your-project/internal/cache"
-	"your-project/internal/services"
+	"erp-api-gateway/internal/cache"
+	"erp-api-gateway/internal/services"
 )
 
 // CachedHandlers provides cached API endpoints

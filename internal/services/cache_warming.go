@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"your-project/internal/cache"
+	"erp-api-gateway/internal/cache"
 )
 
 // CacheWarmingService handles preloading frequently accessed data
@@ -53,6 +53,7 @@ type SystemConfig struct {
 	Features       map[string]bool   `json:"features"`
 	Limits         map[string]int    `json:"limits"`
 	LastModified   time.Time         `json:"last_modified"`
+	Version        string            `json:"version"`
 }
 
 // NewCacheWarmingService creates a new cache warming service
