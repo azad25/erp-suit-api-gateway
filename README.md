@@ -222,6 +222,8 @@ make dev
 
 # Generate protobuf code
 make proto
+export PATH=$PATH:$HOME/go/bin && make proto
+export PATH=$PATH:$HOME/go/bin && protoc --go_out=proto/gen --go_opt=paths=source_relative --go-grpc_out=proto/gen --go-grpc_opt=paths=source_relative proto/auth.proto
 
 # Generate GraphQL code
 make graphql

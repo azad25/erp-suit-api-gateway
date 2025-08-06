@@ -13,8 +13,6 @@ server:
       - "http://127.0.0.1:3000"
       - "http://localhost"
       - "http://erp-frontend:3000"
-      - "http://graphql-gateway:4000"
-      - "http://websocket-server:3001"
     allowed_methods:
       - "GET"
       - "POST"
@@ -72,22 +70,31 @@ grpc:
       timeout: "60s"
       interval: "10s"
 
-# GraphQL Gateway Integration
+# GraphQL Configuration (Local Handler)
 graphql:
-  gateway_host: "graphql-gateway"
-  gateway_port: 4000
-  endpoint: "/graphql"
-  timeout: "30s"
   enable_playground: true
   enable_introspection: true
-
-# WebSocket Server Integration  
-websocket:
-  server_host: "websocket-server"
-  server_port: 3001
-  endpoint: "/socket.io"
   timeout: "30s"
+
+# WebSocket Configuration (Local Handler)
+websocket:
   enable_cors: true
+  timeout: "30s"
+  # Detailed WebSocket configuration
+  read_buffer_size: 4096
+  write_buffer_size: 4096
+  handshake_timeout: "10s"
+  read_timeout: "60s"
+  write_timeout: "10s"
+  pong_timeout: "60s"
+  ping_period: "54s"
+  max_message_size: 1048576  # 1MB
+  max_connections: 10000
+  allowed_origins:
+    - "http://localhost:3000"
+    - "http://127.0.0.1:3000"
+    - "http://localhost"
+    - "http://erp-frontend:3000"
 
 # Health Check Optimization
 health:

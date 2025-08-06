@@ -108,26 +108,300 @@ func (r *queryResolver) User(ctx context.Context, id string) (*model.User, error
 }
 
 // Users is the resolver for the users field.
-func (r *queryResolver) Users(ctx context.Context, limit *int, offset *int, search *string) ([]*model.User, error) {
+func (r *queryResolver) Users(ctx context.Context, limit *int, offset *int, search *string, sortBy *string, sortOrder *string) (*model.UserConnection, error) {
 	// Check if user has admin permission
 	userClaims := ctx.Value("user_claims")
 	if userClaims == nil {
 		return nil, fmt.Errorf("user not authenticated")
 	}
 
-	// TODO: Implement proper RBAC check for admin permission
-	// For now, return empty list as this would require a new gRPC method
+	// Set defaults
+	if limit == nil {
+		defaultLimit := 10
+		limit = &defaultLimit
+	}
+	if offset == nil {
+		defaultOffset := 0
+		offset = &defaultOffset
+	}
+	if sortBy == nil {
+		defaultSortBy := "created_at"
+		sortBy = &defaultSortBy
+	}
+	if sortOrder == nil {
+		defaultSortOrder := "desc"
+		sortOrder = &defaultSortOrder
+	}
 
-	r.Logger.Info("Users query called", map[string]interface{}{
-		"limit":       limit,
-		"offset":      offset,
-		"search":      search,
-		"user_claims": userClaims,
+	// Get organization ID from context
+	orgID, exists := ctx.Value("organization_id").(string)
+	if !exists {
+		return nil, fmt.Errorf("organization context not found")
+	}
+
+	// Call auth service via gRPC
+	authClient, err := r.GRPCClient.AuthService(ctx)
+	if err != nil {
+		r.Logger.Error("Failed to get auth client", map[string]interface{}{
+			"error": err,
+		})
+		return nil, fmt.Errorf("authentication service unavailable")
+	}
+
+	searchStr := ""
+	if search != nil {
+		searchStr = *search
+	}
+
+	resp, err := authClient.ListUsers(ctx, &authpb.ListUsersRequest{
+		OrganizationId: orgID,
+		Limit:          int32(*limit),
+		Offset:         int32(*offset),
+		Search:         searchStr,
+		SortBy:         *sortBy,
+		SortOrder:      *sortOrder,
 	})
 
-	// This would require implementing a ListUsers gRPC method in the auth service
-	// For now, return empty list
-	return []*model.User{}, nil
+	if err != nil {
+		r.Logger.Error("Failed to list users", map[string]interface{}{
+			"error":  err,
+			"org_id": orgID,
+		})
+		return nil, fmt.Errorf("failed to list users")
+	}
+
+	if !resp.Success {
+		return nil, fmt.Errorf("failed to list users: %s", resp.Error)
+	}
+
+	// Convert to GraphQL format
+	edges := make([]*model.UserEdge, len(resp.Users))
+	for i, user := range resp.Users {
+		edges[i] = &model.UserEdge{
+			Node:   convertProtoUserToGraphQL(user),
+			Cursor: fmt.Sprintf("%d", *offset+i+1),
+		}
+	}
+
+	return &model.UserConnection{
+		Edges:      edges,
+		TotalCount: int(resp.TotalCount),
+		PageInfo: &model.PageInfo{
+			HasNextPage:     resp.HasNextPage,
+			HasPreviousPage: *offset > 0,
+			StartCursor:     getStartCursor(edges),
+			EndCursor:       getEndCursor(edges),
+		},
+	}, nil
+}
+
+// UserStats is the resolver for the userStats field.
+func (r *queryResolver) UserStats(ctx context.Context) (*model.UserStats, error) {
+	// Check if user has admin permission
+	userClaims := ctx.Value("user_claims")
+	if userClaims == nil {
+		return nil, fmt.Errorf("user not authenticated")
+	}
+
+	// Get organization ID from context
+	orgID, exists := ctx.Value("organization_id").(string)
+	if !exists {
+		return nil, fmt.Errorf("organization context not found")
+	}
+
+	// Call auth service via gRPC
+	authClient, err := r.GRPCClient.AuthService(ctx)
+	if err != nil {
+		r.Logger.Error("Failed to get auth client", map[string]interface{}{
+			"error": err,
+		})
+		return nil, fmt.Errorf("authentication service unavailable")
+	}
+
+	resp, err := authClient.GetUserStats(ctx, &authpb.GetUserStatsRequest{
+		OrganizationId: orgID,
+	})
+
+	if err != nil {
+		r.Logger.Error("Failed to get user stats", map[string]interface{}{
+			"error":  err,
+			"org_id": orgID,
+		})
+		return nil, fmt.Errorf("failed to get user statistics")
+	}
+
+	if !resp.Success {
+		return nil, fmt.Errorf("failed to get user stats: %s", resp.Error)
+	}
+
+	if resp.Stats == nil {
+		return &model.UserStats{
+			TotalUsers:      0,
+			ActiveUsers:     0,
+			InactiveUsers:   0,
+			VerifiedUsers:   0,
+			UnverifiedUsers: 0,
+			RecentSignups:   0,
+			RecentLogins:    0,
+		}, nil
+	}
+
+	return &model.UserStats{
+		TotalUsers:      int(resp.Stats.TotalUsers),
+		ActiveUsers:     int(resp.Stats.ActiveUsers),
+		InactiveUsers:   int(resp.Stats.InactiveUsers),
+		VerifiedUsers:   int(resp.Stats.VerifiedUsers),
+		UnverifiedUsers: int(resp.Stats.UnverifiedUsers),
+		RecentSignups:   int(resp.Stats.RecentSignups),
+		RecentLogins:    int(resp.Stats.RecentLogins),
+	}, nil
+}
+
+// SecurityStats is the resolver for the securityStats field.
+func (r *queryResolver) SecurityStats(ctx context.Context) (*model.SecurityStats, error) {
+	// Check if user has admin permission
+	userClaims := ctx.Value("user_claims")
+	if userClaims == nil {
+		return nil, fmt.Errorf("user not authenticated")
+	}
+
+	// Get organization ID from context
+	orgID, exists := ctx.Value("organization_id").(string)
+	if !exists {
+		return nil, fmt.Errorf("organization context not found")
+	}
+
+	// Call auth service via gRPC
+	authClient, err := r.GRPCClient.AuthService(ctx)
+	if err != nil {
+		r.Logger.Error("Failed to get auth client", map[string]interface{}{
+			"error": err,
+		})
+		return nil, fmt.Errorf("authentication service unavailable")
+	}
+
+	resp, err := authClient.GetSecurityStats(ctx, &authpb.GetSecurityStatsRequest{
+		OrganizationId: orgID,
+	})
+
+	if err != nil {
+		r.Logger.Error("Failed to get security stats", map[string]interface{}{
+			"error":  err,
+			"org_id": orgID,
+		})
+		return nil, fmt.Errorf("failed to get security statistics")
+	}
+
+	if !resp.Success {
+		return nil, fmt.Errorf("failed to get security stats: %s", resp.Error)
+	}
+
+	if resp.Stats == nil {
+		return &model.SecurityStats{
+			FailedLoginsToday:   0,
+			LockedAccounts:      0,
+			SecurityAlerts:      0,
+			TwoFactorEnabled:    0,
+			PasswordResetsToday: 0,
+		}, nil
+	}
+
+	return &model.SecurityStats{
+		FailedLoginsToday:   int(resp.Stats.FailedLoginsToday),
+		LockedAccounts:      int(resp.Stats.LockedAccounts),
+		SecurityAlerts:      int(resp.Stats.SecurityAlerts),
+		TwoFactorEnabled:    int(resp.Stats.TwoFactorEnabled),
+		PasswordResetsToday: int(resp.Stats.PasswordResetsToday),
+	}, nil
+}
+
+// UserActivity is the resolver for the userActivity field.
+func (r *queryResolver) UserActivity(ctx context.Context, userID *string, limit *int, offset *int) (*model.UserActivityConnection, error) {
+	// Check if user has admin permission
+	userClaims := ctx.Value("user_claims")
+	if userClaims == nil {
+		return nil, fmt.Errorf("user not authenticated")
+	}
+
+	// Set defaults
+	if limit == nil {
+		defaultLimit := 10
+		limit = &defaultLimit
+	}
+	if offset == nil {
+		defaultOffset := 0
+		offset = &defaultOffset
+	}
+
+	// Get organization ID from context
+	orgID, exists := ctx.Value("organization_id").(string)
+	if !exists {
+		return nil, fmt.Errorf("organization context not found")
+	}
+
+	// Call auth service via gRPC
+	authClient, err := r.GRPCClient.AuthService(ctx)
+	if err != nil {
+		r.Logger.Error("Failed to get auth client", map[string]interface{}{
+			"error": err,
+		})
+		return nil, fmt.Errorf("authentication service unavailable")
+	}
+
+	userIDStr := ""
+	if userID != nil {
+		userIDStr = *userID
+	}
+
+	resp, err := authClient.GetUserActivity(ctx, &authpb.GetUserActivityRequest{
+		UserId:         userIDStr,
+		OrganizationId: orgID,
+		Limit:          int32(*limit),
+		Offset:         int32(*offset),
+	})
+
+	if err != nil {
+		r.Logger.Error("Failed to get user activity", map[string]interface{}{
+			"error":   err,
+			"org_id":  orgID,
+			"user_id": userID,
+		})
+		return nil, fmt.Errorf("failed to get user activity")
+	}
+
+	if !resp.Success {
+		return nil, fmt.Errorf("failed to get user activity: %s", resp.Error)
+	}
+
+	// Convert to GraphQL format
+	edges := make([]*model.UserActivityEdge, len(resp.Activities))
+	for i, activity := range resp.Activities {
+		edges[i] = &model.UserActivityEdge{
+			Node: &model.UserActivity{
+				ID:        activity.Id,
+				UserID:    activity.UserId,
+				Action:    activity.Action,
+				Resource:  activity.Resource,
+				Details:   &activity.Details,
+				IPAddress: activity.IpAddress,
+				UserAgent: &activity.UserAgent,
+				CreatedAt: activity.CreatedAt.AsTime().Format("2006-01-02T15:04:05Z07:00"),
+				User: convertActivityUser(activity.User),
+			},
+			Cursor: fmt.Sprintf("%d", *offset+i+1),
+		}
+	}
+
+	return &model.UserActivityConnection{
+		Edges:      edges,
+		TotalCount: int(resp.TotalCount),
+		PageInfo: &model.PageInfo{
+			HasNextPage:     int32(*offset+*limit) < resp.TotalCount,
+			HasPreviousPage: *offset > 0,
+			StartCursor:     getStartCursorActivity(edges),
+			EndCursor:       getEndCursorActivity(edges),
+		},
+	}, nil
 }
 
 // Roles is the resolver for the roles field.
@@ -138,15 +412,69 @@ func (r *queryResolver) Roles(ctx context.Context) ([]*model.Role, error) {
 		return nil, fmt.Errorf("user not authenticated")
 	}
 
-	// TODO: Implement proper RBAC check for admin permission
-	// This would require implementing a ListRoles gRPC method in the auth service
-	// For now, return empty list
+	// Get organization ID from context
+	orgID, exists := ctx.Value("organization_id").(string)
+	if !exists {
+		return nil, fmt.Errorf("organization context not found")
+	}
 
-	r.Logger.Info("Roles query called", map[string]interface{}{
-		"user_claims": userClaims,
+	// Call auth service via gRPC
+	authClient, err := r.GRPCClient.AuthService(ctx)
+	if err != nil {
+		r.Logger.Error("Failed to get auth client", map[string]interface{}{
+			"error": err,
+		})
+		return nil, fmt.Errorf("authentication service unavailable")
+	}
+
+	resp, err := authClient.ListRoles(ctx, &authpb.ListRolesRequest{
+		OrganizationId: orgID,
 	})
 
-	return []*model.Role{}, nil
+	if err != nil {
+		r.Logger.Error("Failed to list roles", map[string]interface{}{
+			"error":  err,
+			"org_id": orgID,
+		})
+		return nil, fmt.Errorf("failed to list roles")
+	}
+
+	if !resp.Success {
+		return nil, fmt.Errorf("failed to list roles: %s", resp.Error)
+	}
+
+	// Convert to GraphQL format
+	roles := make([]*model.Role, len(resp.Roles))
+	for i, role := range resp.Roles {
+		permissions := make([]*model.Permission, len(role.Permissions))
+		for j, perm := range role.Permissions {
+			permissions[j] = &model.Permission{
+				ID:          perm.Id,
+				Name:        perm.Name,
+				Description: &perm.Description,
+				Resource:    perm.Resource,
+				Action:      perm.Action,
+				Scope:       &perm.Scope,
+				IsSystem:    perm.IsSystem,
+				CreatedAt:   perm.CreatedAt.AsTime().Format("2006-01-02T15:04:05Z07:00"),
+				UpdatedAt:   perm.UpdatedAt.AsTime().Format("2006-01-02T15:04:05Z07:00"),
+			}
+		}
+
+		roles[i] = &model.Role{
+			ID:             role.Id,
+			OrganizationID: &role.OrganizationId,
+			Name:           role.Name,
+			Description:    &role.Description,
+			IsSystem:       role.IsSystem,
+			IsActive:       role.IsActive,
+			Permissions:    permissions,
+			CreatedAt:      role.CreatedAt.AsTime().Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:      role.UpdatedAt.AsTime().Format("2006-01-02T15:04:05Z07:00"),
+		}
+	}
+
+	return roles, nil
 }
 
 // Permissions is the resolver for the permissions field.
@@ -157,20 +485,86 @@ func (r *queryResolver) Permissions(ctx context.Context) ([]*model.Permission, e
 		return nil, fmt.Errorf("user not authenticated")
 	}
 
-	// TODO: Implement proper RBAC check for admin permission
-	// This would require implementing a ListPermissions gRPC method in the auth service
-	// For now, return empty list
+	// Call auth service via gRPC
+	authClient, err := r.GRPCClient.AuthService(ctx)
+	if err != nil {
+		r.Logger.Error("Failed to get auth client", map[string]interface{}{
+			"error": err,
+		})
+		return nil, fmt.Errorf("authentication service unavailable")
+	}
 
-	r.Logger.Info("Permissions query called", map[string]interface{}{
-		"user_claims": userClaims,
-	})
+	resp, err := authClient.ListPermissions(ctx, &authpb.ListPermissionsRequest{})
 
-	return []*model.Permission{}, nil
+	if err != nil {
+		r.Logger.Error("Failed to list permissions", map[string]interface{}{
+			"error": err,
+		})
+		return nil, fmt.Errorf("failed to list permissions")
+	}
+
+	if !resp.Success {
+		return nil, fmt.Errorf("failed to list permissions: %s", resp.Error)
+	}
+
+	// Convert to GraphQL format
+	permissions := make([]*model.Permission, len(resp.Permissions))
+	for i, perm := range resp.Permissions {
+		permissions[i] = &model.Permission{
+			ID:          perm.Id,
+			Name:        perm.Name,
+			Description: &perm.Description,
+			Resource:    perm.Resource,
+			Action:      perm.Action,
+			Scope:       &perm.Scope,
+			IsSystem:    perm.IsSystem,
+			CreatedAt:   perm.CreatedAt.AsTime().Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:   perm.UpdatedAt.AsTime().Format("2006-01-02T15:04:05Z07:00"),
+		}
+	}
+
+	return permissions, nil
 }
 
 // Health is the resolver for the health field.
 func (r *queryResolver) Health(ctx context.Context) (string, error) {
 	return "OK", nil
+}
+
+// Helper functions for cursor management
+func getStartCursor(edges []*model.UserEdge) *string {
+	if len(edges) > 0 {
+		return &edges[0].Cursor
+	}
+	return nil
+}
+
+func getEndCursor(edges []*model.UserEdge) *string {
+	if len(edges) > 0 {
+		return &edges[len(edges)-1].Cursor
+	}
+	return nil
+}
+
+func getStartCursorActivity(edges []*model.UserActivityEdge) *string {
+	if len(edges) > 0 {
+		return &edges[0].Cursor
+	}
+	return nil
+}
+
+func getEndCursorActivity(edges []*model.UserActivityEdge) *string {
+	if len(edges) > 0 {
+		return &edges[len(edges)-1].Cursor
+	}
+	return nil
+}
+
+func convertActivityUser(protoUser *authpb.User) *model.User {
+	if protoUser != nil {
+		return convertProtoUserToGraphQL(protoUser)
+	}
+	return nil
 }
 
 // Query returns generated.QueryResolver implementation.

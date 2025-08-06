@@ -21,4 +21,84 @@ type Mutation {
   Refresh access token
   """
   RefreshToken(refreshToken: String!): AuthResponse!
+
+  """
+  Create a new user (admin only)
+  """
+  createUserAdmin(input: CreateUserInput!): UserMutationResponse!
+
+  """
+  Update user information (admin only)
+  """
+  updateUser(id: ID!, input: UpdateUserInput!): UserMutationResponse!
+
+  """
+  Delete a user (admin only)
+  """
+  deleteUser(id: ID!): MutationResponse!
+
+  """
+  Activate a user (admin only)
+  """
+  activateUser(id: ID!): UserMutationResponse!
+
+  """
+  Deactivate a user (admin only)
+  """
+  deactivateUser(id: ID!): UserMutationResponse!
+
+  """
+  Verify a user (admin only)
+  """
+  verifyUser(id: ID!): UserMutationResponse!
+
+  """
+  Reset user password (admin only)
+  """
+  resetUserPassword(id: ID!, newPassword: String!): MutationResponse!
+
+  """
+  Create a new role (admin only)
+  """
+  createRole(input: CreateRoleInput!): RoleMutationResponse!
+
+  """
+  Update a role (admin only)
+  """
+  updateRole(id: ID!, input: UpdateRoleInput!): RoleMutationResponse!
+
+  """
+  Delete a role (admin only)
+  """
+  deleteRole(id: ID!): MutationResponse!
+
+  """
+  Assign role to user (admin only)
+  """
+  assignUserRole(userId: ID!, roleId: ID!): MutationResponse!
+
+  """
+  Revoke role from user (admin only)
+  """
+  revokeUserRole(userId: ID!, roleId: ID!): MutationResponse!
+
+  """
+  Assign permissions to role (admin only)
+  """
+  assignPermissions(roleId: ID!, permissionIds: [ID!]!): MutationResponse!
+
+  """
+  Bulk create users (admin only)
+  """
+  bulkCreateUsers(input: BulkCreateUsersInput!): BulkUserMutationResponse!
+
+  """
+  Bulk update users (admin only)
+  """
+  bulkUpdateUsers(input: BulkUpdateUsersInput!): BulkUserMutationResponse!
+
+  """
+  Bulk delete users (admin only)
+  """
+  bulkDeleteUsers(userIds: [ID!]!): BulkDeleteMutationResponse!
 }

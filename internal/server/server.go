@@ -17,7 +17,6 @@ import (
 	"erp-api-gateway/internal/health"
 	"erp-api-gateway/internal/interfaces"
 	"erp-api-gateway/internal/logging"
-	"erp-api-gateway/internal/proxy"
 	"erp-api-gateway/internal/services"
 	"erp-api-gateway/internal/services/grpc_client"
 	"erp-api-gateway/middleware"
@@ -36,8 +35,6 @@ type Server struct {
 	policyEngine   interfaces.PolicyEngine
 	wsHandler      *ws.Handler
 	graphqlHandler *graphql.GraphQLHandler
-	graphqlProxy   *proxy.GraphQLProxy
-	websocketProxy *proxy.WebSocketProxy
 	healthManager  *health.HealthManager
 }
 
@@ -83,11 +80,7 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 		deps.KafkaProducer,
 	)
 	
-	// Create GraphQL proxy (to infrastructure GraphQL Gateway)
-	graphqlProxy := proxy.NewGraphQLProxy(&cfg.GraphQL, logging.NewSimpleLogger(deps.Logger))
-	
-	// Create WebSocket proxy (to infrastructure WebSocket Server)
-	websocketProxy := proxy.NewWebSocketProxy(&cfg.WebSocket, logging.NewSimpleLogger(deps.Logger))
+	// Note: Removed GraphQL and WebSocket proxies - using local handlers instead
 	
 	// Create optimized health manager
 	healthManager := health.NewHealthManager(logging.NewSimpleLogger(deps.Logger))
@@ -105,18 +98,7 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 		healthManager.RegisterChecker(health.NewKafkaHealthChecker(deps.KafkaProducer))
 	}
 	
-	// Register HTTP health checkers for infrastructure services
-	healthManager.RegisterChecker(health.NewHTTPHealthChecker(
-		"graphql_gateway",
-		fmt.Sprintf("http://%s:%d/health", cfg.GraphQL.GatewayHost, cfg.GraphQL.GatewayPort),
-		5*time.Second,
-	))
-	
-	healthManager.RegisterChecker(health.NewHTTPHealthChecker(
-		"websocket_server", 
-		fmt.Sprintf("http://%s:%d/health", cfg.WebSocket.ServerHost, cfg.WebSocket.ServerPort),
-		5*time.Second,
-	))
+	// Note: Removed health checkers for non-existent infrastructure services
 	
 	server := &Server{
 		config:         cfg,
@@ -129,8 +111,6 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 		policyEngine:   deps.PolicyEngine,
 		wsHandler:      wsHandler,
 		graphqlHandler: graphqlHandler,
-		graphqlProxy:   graphqlProxy,
-		websocketProxy: websocketProxy,
 		healthManager:  healthManager,
 		httpServer: &http.Server{
 			Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
@@ -268,12 +248,8 @@ func (s *Server) setupRoutes() {
 	// Metrics endpoint (no authentication required)
 	s.router.GET("/metrics", s.metricsHandler)
 	
-	// WebSocket endpoints
-	// Option 1: Use infrastructure WebSocket Server (recommended)
-	s.router.GET("/ws", s.optionalAuth(), s.websocketProxy.ProxyConnection)
-	
-	// Option 2: Use local WebSocket handler (fallback)
-	s.router.GET("/ws/local", s.handleWebSocket)
+	// WebSocket endpoints - using local handler
+	s.router.GET("/ws", s.optionalAuth(), s.handleWebSocket)
 	
 	// GraphQL endpoints
 	s.setupGraphQLRoutes()
@@ -284,14 +260,16 @@ func (s *Server) setupRoutes() {
 
 // setupGraphQLRoutes sets up GraphQL routes
 func (s *Server) setupGraphQLRoutes() {
-	// Option 1: Use infrastructure GraphQL Gateway (recommended)
-	s.router.POST("/graphql", s.optionalAuth(), s.graphqlProxy.ProxyRequest)
-	s.router.GET("/graphql", s.graphqlProxy.ProxyPlayground)
+	// Use local GraphQL handler directly
+	// POST requests for GraphQL operations - use optional auth to allow both authenticated and unauthenticated queries
+	s.router.POST("/graphql", s.optionalAuth(), s.graphqlHandler.ServeHTTP())
 	
-	// Option 2: Use local GraphQL handler (fallback)
-	s.router.POST("/graphql/local", s.optionalAuth(), s.graphqlHandler.ServeHTTP())
+	// GET requests for GraphQL operations (introspection, etc.) - no auth required
+	s.router.GET("/graphql", s.graphqlHandler.ServeHTTP())
+	
+	// GraphQL Playground (development only)
 	if s.config.IsDevelopment() {
-		s.router.GET("/graphql/local", s.graphqlHandler.PlaygroundHandler())
+		s.router.GET("/playground", s.graphqlHandler.PlaygroundHandler())
 	}
 }
 

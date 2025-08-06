@@ -219,6 +219,414 @@ func (r *mutationResolver) RefreshToken(ctx context.Context, refreshToken string
 	}, nil
 }
 
+// CreateUserAdmin is the resolver for the createUserAdmin field.
+func (r *mutationResolver) CreateUserAdmin(ctx context.Context, input model.CreateUserInput) (*model.UserMutationResponse, error) {
+	// Check if user has admin permission
+	userClaims := ctx.Value("user_claims")
+	if userClaims == nil {
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "User not authenticated",
+			Errors: []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
+		}, nil
+	}
+
+	// Get organization ID from context
+	orgID, exists := ctx.Value("organization_id").(string)
+	if !exists {
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Organization context not found",
+			Errors: []*model.FieldError{{Field: "organization", Message: "Organization context required"}},
+		}, nil
+	}
+
+	// Call auth service via gRPC
+	authClient, err := r.GRPCClient.AuthService(ctx)
+	if err != nil {
+		r.Logger.Error("Failed to get auth client", map[string]interface{}{
+			"error": err,
+		})
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Authentication service unavailable",
+			Errors: []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
+		}, nil
+	}
+
+	resp, err := authClient.CreateUser(ctx, &authpb.CreateUserRequest{
+		OrganizationId: orgID,
+		Email:          input.Email,
+		Password:       input.Password,
+		FirstName:      input.FirstName,
+		LastName:       input.LastName,
+		IsActive:       input.IsActive != nil && *input.IsActive,
+		IsVerified:     input.IsVerified != nil && *input.IsVerified,
+		RoleIds:        input.RoleIds,
+	})
+
+	if err != nil {
+		r.Logger.Error("CreateUser gRPC call failed", map[string]interface{}{
+			"error": err,
+			"email": input.Email,
+		})
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Failed to create user",
+			Errors: []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
+		}, nil
+	}
+
+	if !resp.Success {
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Failed to create user",
+			Errors: []*model.FieldError{{Field: "general", Message: resp.Error}},
+		}, nil
+	}
+
+	return &model.UserMutationResponse{
+		Success: true,
+		Message: "User created successfully",
+		User:    convertProtoUserToGraphQL(resp.User),
+	}, nil
+}
+
+// UpdateUser is the resolver for the updateUser field.
+func (r *mutationResolver) UpdateUser(ctx context.Context, id string, input model.UpdateUserInput) (*model.UserMutationResponse, error) {
+	// Check if user has admin permission
+	userClaims := ctx.Value("user_claims")
+	if userClaims == nil {
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "User not authenticated",
+			Errors: []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
+		}, nil
+	}
+
+	// Call auth service via gRPC
+	authClient, err := r.GRPCClient.AuthService(ctx)
+	if err != nil {
+		r.Logger.Error("Failed to get auth client", map[string]interface{}{
+			"error": err,
+		})
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Authentication service unavailable",
+			Errors: []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
+		}, nil
+	}
+
+	resp, err := authClient.UpdateUser(ctx, &authpb.UpdateUserRequest{
+		UserId:     id,
+		Email:      func() string { if input.Email != nil { return *input.Email }; return "" }(),
+		FirstName:  func() string { if input.FirstName != nil { return *input.FirstName }; return "" }(),
+		LastName:   func() string { if input.LastName != nil { return *input.LastName }; return "" }(),
+		IsActive:   input.IsActive != nil && *input.IsActive,
+		IsVerified: input.IsVerified != nil && *input.IsVerified,
+		RoleIds:    input.RoleIds,
+	})
+
+	if err != nil {
+		r.Logger.Error("UpdateUser gRPC call failed", map[string]interface{}{
+			"error":   err,
+			"user_id": id,
+		})
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Failed to update user",
+			Errors: []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
+		}, nil
+	}
+
+	if !resp.Success {
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Failed to update user",
+			Errors: []*model.FieldError{{Field: "general", Message: resp.Error}},
+		}, nil
+	}
+
+	return &model.UserMutationResponse{
+		Success: true,
+		Message: "User updated successfully",
+		User:    convertProtoUserToGraphQL(resp.User),
+	}, nil
+}
+
+// DeleteUser is the resolver for the deleteUser field.
+func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (*model.MutationResponse, error) {
+	// Check if user has admin permission
+	userClaims := ctx.Value("user_claims")
+	if userClaims == nil {
+		return &model.MutationResponse{
+			Success: false,
+			Message: "User not authenticated",
+			Errors: []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
+		}, nil
+	}
+
+	// Call auth service via gRPC
+	authClient, err := r.GRPCClient.AuthService(ctx)
+	if err != nil {
+		r.Logger.Error("Failed to get auth client", map[string]interface{}{
+			"error": err,
+		})
+		return &model.MutationResponse{
+			Success: false,
+			Message: "Authentication service unavailable",
+			Errors: []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
+		}, nil
+	}
+
+	resp, err := authClient.DeleteUser(ctx, &authpb.DeleteUserRequest{
+		UserId: id,
+	})
+
+	if err != nil {
+		r.Logger.Error("DeleteUser gRPC call failed", map[string]interface{}{
+			"error":   err,
+			"user_id": id,
+		})
+		return &model.MutationResponse{
+			Success: false,
+			Message: "Failed to delete user",
+			Errors: []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
+		}, nil
+	}
+
+	if !resp.Success {
+		return &model.MutationResponse{
+			Success: false,
+			Message: "Failed to delete user",
+			Errors: []*model.FieldError{{Field: "general", Message: resp.Error}},
+		}, nil
+	}
+
+	return &model.MutationResponse{
+		Success: true,
+		Message: "User deleted successfully",
+	}, nil
+}
+
+// ActivateUser is the resolver for the activateUser field.
+func (r *mutationResolver) ActivateUser(ctx context.Context, id string) (*model.UserMutationResponse, error) {
+	// Check if user has admin permission
+	userClaims := ctx.Value("user_claims")
+	if userClaims == nil {
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "User not authenticated",
+			Errors: []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
+		}, nil
+	}
+
+	// Call auth service via gRPC
+	authClient, err := r.GRPCClient.AuthService(ctx)
+	if err != nil {
+		r.Logger.Error("Failed to get auth client", map[string]interface{}{
+			"error": err,
+		})
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Authentication service unavailable",
+			Errors: []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
+		}, nil
+	}
+
+	resp, err := authClient.ActivateUser(ctx, &authpb.ActivateUserRequest{
+		UserId: id,
+	})
+
+	if err != nil {
+		r.Logger.Error("ActivateUser gRPC call failed", map[string]interface{}{
+			"error":   err,
+			"user_id": id,
+		})
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Failed to activate user",
+			Errors: []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
+		}, nil
+	}
+
+	if !resp.Success {
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Failed to activate user",
+			Errors: []*model.FieldError{{Field: "general", Message: resp.Error}},
+		}, nil
+	}
+
+	return &model.UserMutationResponse{
+		Success: true,
+		Message: "User activated successfully",
+		User:    convertProtoUserToGraphQL(resp.User),
+	}, nil
+}
+
+// DeactivateUser is the resolver for the deactivateUser field.
+func (r *mutationResolver) DeactivateUser(ctx context.Context, id string) (*model.UserMutationResponse, error) {
+	// Check if user has admin permission
+	userClaims := ctx.Value("user_claims")
+	if userClaims == nil {
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "User not authenticated",
+			Errors: []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
+		}, nil
+	}
+
+	// Call auth service via gRPC
+	authClient, err := r.GRPCClient.AuthService(ctx)
+	if err != nil {
+		r.Logger.Error("Failed to get auth client", map[string]interface{}{
+			"error": err,
+		})
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Authentication service unavailable",
+			Errors: []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
+		}, nil
+	}
+
+	resp, err := authClient.DeactivateUser(ctx, &authpb.DeactivateUserRequest{
+		UserId: id,
+	})
+
+	if err != nil {
+		r.Logger.Error("DeactivateUser gRPC call failed", map[string]interface{}{
+			"error":   err,
+			"user_id": id,
+		})
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Failed to deactivate user",
+			Errors: []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
+		}, nil
+	}
+
+	if !resp.Success {
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Failed to deactivate user",
+			Errors: []*model.FieldError{{Field: "general", Message: resp.Error}},
+		}, nil
+	}
+
+	return &model.UserMutationResponse{
+		Success: true,
+		Message: "User deactivated successfully",
+		User:    convertProtoUserToGraphQL(resp.User),
+	}, nil
+}
+
+// VerifyUser is the resolver for the verifyUser field.
+func (r *mutationResolver) VerifyUser(ctx context.Context, id string) (*model.UserMutationResponse, error) {
+	// Check if user has admin permission
+	userClaims := ctx.Value("user_claims")
+	if userClaims == nil {
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "User not authenticated",
+			Errors: []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
+		}, nil
+	}
+
+	// Call auth service via gRPC
+	authClient, err := r.GRPCClient.AuthService(ctx)
+	if err != nil {
+		r.Logger.Error("Failed to get auth client", map[string]interface{}{
+			"error": err,
+		})
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Authentication service unavailable",
+			Errors: []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
+		}, nil
+	}
+
+	resp, err := authClient.VerifyUser(ctx, &authpb.VerifyUserRequest{
+		UserId: id,
+	})
+
+	if err != nil {
+		r.Logger.Error("VerifyUser gRPC call failed", map[string]interface{}{
+			"error":   err,
+			"user_id": id,
+		})
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Failed to verify user",
+			Errors: []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
+		}, nil
+	}
+
+	if !resp.Success {
+		return &model.UserMutationResponse{
+			Success: false,
+			Message: "Failed to verify user",
+			Errors: []*model.FieldError{{Field: "general", Message: resp.Error}},
+		}, nil
+	}
+
+	return &model.UserMutationResponse{
+		Success: true,
+		Message: "User verified successfully",
+		User:    convertProtoUserToGraphQL(resp.User),
+	}, nil
+}
+
+// ResetUserPassword is the resolver for the resetUserPassword field.
+func (r *mutationResolver) ResetUserPassword(ctx context.Context, id string, newPassword string) (*model.MutationResponse, error) {
+	panic(fmt.Errorf("not implemented: ResetUserPassword - resetUserPassword"))
+}
+
+// CreateRole is the resolver for the createRole field.
+func (r *mutationResolver) CreateRole(ctx context.Context, input model.CreateRoleInput) (*model.RoleMutationResponse, error) {
+	panic(fmt.Errorf("not implemented: CreateRole - createRole"))
+}
+
+// UpdateRole is the resolver for the updateRole field.
+func (r *mutationResolver) UpdateRole(ctx context.Context, id string, input model.UpdateRoleInput) (*model.RoleMutationResponse, error) {
+	panic(fmt.Errorf("not implemented: UpdateRole - updateRole"))
+}
+
+// DeleteRole is the resolver for the deleteRole field.
+func (r *mutationResolver) DeleteRole(ctx context.Context, id string) (*model.MutationResponse, error) {
+	panic(fmt.Errorf("not implemented: DeleteRole - deleteRole"))
+}
+
+// AssignUserRole is the resolver for the assignUserRole field.
+func (r *mutationResolver) AssignUserRole(ctx context.Context, userID string, roleID string) (*model.MutationResponse, error) {
+	panic(fmt.Errorf("not implemented: AssignUserRole - assignUserRole"))
+}
+
+// RevokeUserRole is the resolver for the revokeUserRole field.
+func (r *mutationResolver) RevokeUserRole(ctx context.Context, userID string, roleID string) (*model.MutationResponse, error) {
+	panic(fmt.Errorf("not implemented: RevokeUserRole - revokeUserRole"))
+}
+
+// AssignPermissions is the resolver for the assignPermissions field.
+func (r *mutationResolver) AssignPermissions(ctx context.Context, roleID string, permissionIds []string) (*model.MutationResponse, error) {
+	panic(fmt.Errorf("not implemented: AssignPermissions - assignPermissions"))
+}
+
+// BulkCreateUsers is the resolver for the bulkCreateUsers field.
+func (r *mutationResolver) BulkCreateUsers(ctx context.Context, input model.BulkCreateUsersInput) (*model.BulkUserMutationResponse, error) {
+	panic(fmt.Errorf("not implemented: BulkCreateUsers - bulkCreateUsers"))
+}
+
+// BulkUpdateUsers is the resolver for the bulkUpdateUsers field.
+func (r *mutationResolver) BulkUpdateUsers(ctx context.Context, input model.BulkUpdateUsersInput) (*model.BulkUserMutationResponse, error) {
+	panic(fmt.Errorf("not implemented: BulkUpdateUsers - bulkUpdateUsers"))
+}
+
+// BulkDeleteUsers is the resolver for the bulkDeleteUsers field.
+func (r *mutationResolver) BulkDeleteUsers(ctx context.Context, userIds []string) (*model.BulkDeleteMutationResponse, error) {
+	panic(fmt.Errorf("not implemented: BulkDeleteUsers - bulkDeleteUsers"))
+}
+
 // Mutation returns generated.MutationResolver implementation.
 func (r *Resolver) Mutation() generated.MutationResolver { return &mutationResolver{r} }
 

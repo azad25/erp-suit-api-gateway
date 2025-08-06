@@ -3,12 +3,29 @@ User represents a user in the system
 """
 type User {
   id: ID!
+  organizationId: String
   firstName: String!
   lastName: String!
   email: String!
   emailVerifiedAt: String
+  isActive: Boolean!
+  isVerified: Boolean!
+  lastLoginAt: String
   roles: [Role!]!
   permissions: [Permission!]!
+  createdAt: String!
+  updatedAt: String!
+  organization: Organization
+}
+
+"""
+Organization represents an organization
+"""
+type Organization {
+  id: ID!
+  name: String!
+  domain: String!
+  isActive: Boolean!
   createdAt: String!
   updatedAt: String!
 }
@@ -18,9 +35,14 @@ Role represents a user role
 """
 type Role {
   id: ID!
+  organizationId: String
   name: String!
   description: String
+  isSystem: Boolean!
+  isActive: Boolean!
   permissions: [Permission!]!
+  createdAt: String!
+  updatedAt: String!
 }
 
 """
@@ -32,6 +54,93 @@ type Permission {
   description: String
   resource: String!
   action: String!
+  scope: String
+  isSystem: Boolean!
+  createdAt: String!
+  updatedAt: String!
+}
+
+"""
+User connection for pagination
+"""
+type UserConnection {
+  edges: [UserEdge!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+"""
+User edge for pagination
+"""
+type UserEdge {
+  node: User!
+  cursor: String!
+}
+
+"""
+Page info for pagination
+"""
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+"""
+User statistics
+"""
+type UserStats {
+  totalUsers: Int!
+  activeUsers: Int!
+  inactiveUsers: Int!
+  verifiedUsers: Int!
+  unverifiedUsers: Int!
+  recentSignups: Int!
+  recentLogins: Int!
+}
+
+"""
+Security statistics
+"""
+type SecurityStats {
+  failedLoginsToday: Int!
+  lockedAccounts: Int!
+  securityAlerts: Int!
+  twoFactorEnabled: Int!
+  passwordResetsToday: Int!
+}
+
+"""
+User activity log entry
+"""
+type UserActivity {
+  id: ID!
+  userId: String!
+  action: String!
+  resource: String!
+  details: String
+  ipAddress: String!
+  userAgent: String
+  createdAt: String!
+  user: User
+}
+
+"""
+User activity connection for pagination
+"""
+type UserActivityConnection {
+  edges: [UserActivityEdge!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+"""
+User activity edge for pagination
+"""
+type UserActivityEdge {
+  node: UserActivity!
+  cursor: String!
 }
 
 """
@@ -54,6 +163,71 @@ input LoginInput {
 }
 
 """
+Input for creating a user (admin)
+"""
+input CreateUserInput {
+  email: String!
+  password: String!
+  firstName: String!
+  lastName: String!
+  isActive: Boolean = true
+  isVerified: Boolean = false
+  roleIds: [ID!]
+}
+
+"""
+Input for updating a user
+"""
+input UpdateUserInput {
+  email: String
+  firstName: String
+  lastName: String
+  isActive: Boolean
+  isVerified: Boolean
+  roleIds: [ID!]
+}
+
+"""
+Input for creating a role
+"""
+input CreateRoleInput {
+  name: String!
+  description: String
+  permissionIds: [ID!]
+}
+
+"""
+Input for updating a role
+"""
+input UpdateRoleInput {
+  name: String
+  description: String
+  permissionIds: [ID!]
+}
+
+"""
+Input for bulk creating users
+"""
+input BulkCreateUsersInput {
+  users: [CreateUserInput!]!
+}
+
+"""
+Input for bulk updating users
+"""
+input BulkUpdateUsersInput {
+  updates: [UserUpdateInput!]!
+}
+
+"""
+Input for user update in bulk operations
+"""
+input UserUpdateInput {
+  id: ID!
+  input: UpdateUserInput!
+}
+
+"""
 Authentication response
 """
 type AuthResponse {
@@ -70,6 +244,70 @@ type MutationResponse {
   success: Boolean!
   message: String!
   errors: [FieldError!]
+}
+
+"""
+User mutation response
+"""
+type UserMutationResponse {
+  success: Boolean!
+  message: String!
+  user: User
+  errors: [FieldError!]
+}
+
+"""
+Role mutation response
+"""
+type RoleMutationResponse {
+  success: Boolean!
+  message: String!
+  role: Role
+  errors: [FieldError!]
+}
+
+"""
+Bulk user mutation response
+"""
+type BulkUserMutationResponse {
+  success: Boolean!
+  message: String!
+  results: [BulkUserResult!]!
+  createdCount: Int
+  updatedCount: Int
+  failedCount: Int!
+  errors: [FieldError!]
+}
+
+"""
+Bulk delete mutation response
+"""
+type BulkDeleteMutationResponse {
+  success: Boolean!
+  message: String!
+  deletedCount: Int!
+  failedCount: Int!
+  results: [BulkDeleteResult!]!
+  errors: [FieldError!]
+}
+
+"""
+Bulk user operation result
+"""
+type BulkUserResult {
+  success: Boolean!
+  user: User
+  error: String
+  email: String
+}
+
+"""
+Bulk delete operation result
+"""
+type BulkDeleteResult {
+  success: Boolean!
+  userId: String!
+  error: String
 }
 
 """

@@ -13,13 +13,34 @@ type Query {
   user(id: ID!): User
 
   """
-  Get all users (requires admin permission)
+  Get all users with pagination and search (requires admin permission)
   """
   users(
     limit: Int = 10
     offset: Int = 0
     search: String
-  ): [User!]!
+    sortBy: String = "created_at"
+    sortOrder: String = "desc"
+  ): UserConnection!
+
+  """
+  Get user statistics (requires admin permission)
+  """
+  userStats: UserStats!
+
+  """
+  Get security statistics (requires admin permission)
+  """
+  securityStats: SecurityStats!
+
+  """
+  Get user activity logs (requires admin permission)
+  """
+  userActivity(
+    userId: ID
+    limit: Int = 10
+    offset: Int = 0
+  ): UserActivityConnection!
 
   """
   Get all roles (requires admin permission)

@@ -17,6 +17,70 @@ type AuthResponse struct {
 	ExpiresIn    int    `json:"expiresIn"`
 }
 
+// Input for bulk creating users
+type BulkCreateUsersInput struct {
+	Users []*CreateUserInput `json:"users"`
+}
+
+// Bulk delete mutation response
+type BulkDeleteMutationResponse struct {
+	Success      bool                `json:"success"`
+	Message      string              `json:"message"`
+	DeletedCount int                 `json:"deletedCount"`
+	FailedCount  int                 `json:"failedCount"`
+	Results      []*BulkDeleteResult `json:"results"`
+	Errors       []*FieldError       `json:"errors,omitempty"`
+}
+
+// Bulk delete operation result
+type BulkDeleteResult struct {
+	Success bool    `json:"success"`
+	UserID  string  `json:"userId"`
+	Error   *string `json:"error,omitempty"`
+}
+
+// Input for bulk updating users
+type BulkUpdateUsersInput struct {
+	Updates []*UserUpdateInput `json:"updates"`
+}
+
+// Bulk user mutation response
+type BulkUserMutationResponse struct {
+	Success      bool              `json:"success"`
+	Message      string            `json:"message"`
+	Results      []*BulkUserResult `json:"results"`
+	CreatedCount *int              `json:"createdCount,omitempty"`
+	UpdatedCount *int              `json:"updatedCount,omitempty"`
+	FailedCount  int               `json:"failedCount"`
+	Errors       []*FieldError     `json:"errors,omitempty"`
+}
+
+// Bulk user operation result
+type BulkUserResult struct {
+	Success bool    `json:"success"`
+	User    *User   `json:"user,omitempty"`
+	Error   *string `json:"error,omitempty"`
+	Email   *string `json:"email,omitempty"`
+}
+
+// Input for creating a role
+type CreateRoleInput struct {
+	Name          string   `json:"name"`
+	Description   *string  `json:"description,omitempty"`
+	PermissionIds []string `json:"permissionIds,omitempty"`
+}
+
+// Input for creating a user (admin)
+type CreateUserInput struct {
+	Email      string   `json:"email"`
+	Password   string   `json:"password"`
+	FirstName  string   `json:"firstName"`
+	LastName   string   `json:"lastName"`
+	IsActive   *bool    `json:"isActive,omitempty"`
+	IsVerified *bool    `json:"isVerified,omitempty"`
+	RoleIds    []string `json:"roleIds,omitempty"`
+}
+
 // Field-specific error
 type FieldError struct {
 	Field   string `json:"field"`
@@ -53,6 +117,24 @@ type Notification struct {
 	CreatedAt string           `json:"createdAt"`
 }
 
+// Organization represents an organization
+type Organization struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Domain    string `json:"domain"`
+	IsActive  bool   `json:"isActive"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+// Page info for pagination
+type PageInfo struct {
+	HasNextPage     bool    `json:"hasNextPage"`
+	HasPreviousPage bool    `json:"hasPreviousPage"`
+	StartCursor     *string `json:"startCursor,omitempty"`
+	EndCursor       *string `json:"endCursor,omitempty"`
+}
+
 // Permission represents a system permission
 type Permission struct {
 	ID          string  `json:"id"`
@@ -60,6 +142,10 @@ type Permission struct {
 	Description *string `json:"description,omitempty"`
 	Resource    string  `json:"resource"`
 	Action      string  `json:"action"`
+	Scope       *string `json:"scope,omitempty"`
+	IsSystem    bool    `json:"isSystem"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
 }
 
 // Root Query type
@@ -76,10 +162,32 @@ type RegisterInput struct {
 
 // Role represents a user role
 type Role struct {
-	ID          string        `json:"id"`
-	Name        string        `json:"name"`
-	Description *string       `json:"description,omitempty"`
-	Permissions []*Permission `json:"permissions"`
+	ID             string        `json:"id"`
+	OrganizationID *string       `json:"organizationId,omitempty"`
+	Name           string        `json:"name"`
+	Description    *string       `json:"description,omitempty"`
+	IsSystem       bool          `json:"isSystem"`
+	IsActive       bool          `json:"isActive"`
+	Permissions    []*Permission `json:"permissions"`
+	CreatedAt      string        `json:"createdAt"`
+	UpdatedAt      string        `json:"updatedAt"`
+}
+
+// Role mutation response
+type RoleMutationResponse struct {
+	Success bool          `json:"success"`
+	Message string        `json:"message"`
+	Role    *Role         `json:"role,omitempty"`
+	Errors  []*FieldError `json:"errors,omitempty"`
+}
+
+// Security statistics
+type SecurityStats struct {
+	FailedLoginsToday   int `json:"failedLoginsToday"`
+	LockedAccounts      int `json:"lockedAccounts"`
+	SecurityAlerts      int `json:"securityAlerts"`
+	TwoFactorEnabled    int `json:"twoFactorEnabled"`
+	PasswordResetsToday int `json:"passwordResetsToday"`
 }
 
 // Root Subscription type for real-time updates
@@ -96,17 +204,103 @@ type SystemAnnouncement struct {
 	CreatedAt string           `json:"createdAt"`
 }
 
+// Input for updating a role
+type UpdateRoleInput struct {
+	Name          *string  `json:"name,omitempty"`
+	Description   *string  `json:"description,omitempty"`
+	PermissionIds []string `json:"permissionIds,omitempty"`
+}
+
+// Input for updating a user
+type UpdateUserInput struct {
+	Email      *string  `json:"email,omitempty"`
+	FirstName  *string  `json:"firstName,omitempty"`
+	LastName   *string  `json:"lastName,omitempty"`
+	IsActive   *bool    `json:"isActive,omitempty"`
+	IsVerified *bool    `json:"isVerified,omitempty"`
+	RoleIds    []string `json:"roleIds,omitempty"`
+}
+
 // User represents a user in the system
 type User struct {
 	ID              string        `json:"id"`
+	OrganizationID  *string       `json:"organizationId,omitempty"`
 	FirstName       string        `json:"firstName"`
 	LastName        string        `json:"lastName"`
 	Email           string        `json:"email"`
 	EmailVerifiedAt *string       `json:"emailVerifiedAt,omitempty"`
+	IsActive        bool          `json:"isActive"`
+	IsVerified      bool          `json:"isVerified"`
+	LastLoginAt     *string       `json:"lastLoginAt,omitempty"`
 	Roles           []*Role       `json:"roles"`
 	Permissions     []*Permission `json:"permissions"`
 	CreatedAt       string        `json:"createdAt"`
 	UpdatedAt       string        `json:"updatedAt"`
+	Organization    *Organization `json:"organization,omitempty"`
+}
+
+// User activity log entry
+type UserActivity struct {
+	ID        string  `json:"id"`
+	UserID    string  `json:"userId"`
+	Action    string  `json:"action"`
+	Resource  string  `json:"resource"`
+	Details   *string `json:"details,omitempty"`
+	IPAddress string  `json:"ipAddress"`
+	UserAgent *string `json:"userAgent,omitempty"`
+	CreatedAt string  `json:"createdAt"`
+	User      *User   `json:"user,omitempty"`
+}
+
+// User activity connection for pagination
+type UserActivityConnection struct {
+	Edges      []*UserActivityEdge `json:"edges"`
+	TotalCount int                 `json:"totalCount"`
+	PageInfo   *PageInfo           `json:"pageInfo"`
+}
+
+// User activity edge for pagination
+type UserActivityEdge struct {
+	Node   *UserActivity `json:"node"`
+	Cursor string        `json:"cursor"`
+}
+
+// User connection for pagination
+type UserConnection struct {
+	Edges      []*UserEdge `json:"edges"`
+	TotalCount int         `json:"totalCount"`
+	PageInfo   *PageInfo   `json:"pageInfo"`
+}
+
+// User edge for pagination
+type UserEdge struct {
+	Node   *User  `json:"node"`
+	Cursor string `json:"cursor"`
+}
+
+// User mutation response
+type UserMutationResponse struct {
+	Success bool          `json:"success"`
+	Message string        `json:"message"`
+	User    *User         `json:"user,omitempty"`
+	Errors  []*FieldError `json:"errors,omitempty"`
+}
+
+// User statistics
+type UserStats struct {
+	TotalUsers      int `json:"totalUsers"`
+	ActiveUsers     int `json:"activeUsers"`
+	InactiveUsers   int `json:"inactiveUsers"`
+	VerifiedUsers   int `json:"verifiedUsers"`
+	UnverifiedUsers int `json:"unverifiedUsers"`
+	RecentSignups   int `json:"recentSignups"`
+	RecentLogins    int `json:"recentLogins"`
+}
+
+// Input for user update in bulk operations
+type UserUpdateInput struct {
+	ID    string           `json:"id"`
+	Input *UpdateUserInput `json:"input"`
 }
 
 // Announcement types
