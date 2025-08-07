@@ -86,6 +86,85 @@ erp-api-gateway/
 ## Architecture 
 
 ```mermaid
+graph TB
+    Client[Frontend Client] --> AG[API Gateway<br/>Port: 8000]
+    AG --> AS[Auth Service<br/>gRPC: 50051<br/>HTTP: 8080]
+    AG --> CRM[CRM Service<br/>gRPC: 50052]
+    AG --> HRM[HRM Service<br/>gRPC: 50053]
+    AG --> FIN[Finance Service<br/>gRPC: 50054]
+    
+    AS --> DB[(PostgreSQL)]
+    AS --> Redis[(Redis Cache)]
+    AS --> Kafka[Kafka Events]
+    
+    subgraph "API Gateway Features"
+        REST[REST API]
+        GQL[GraphQL]
+        WS[WebSocket]
+        JWT[JWT Validation]
+        RBAC[RBAC Middleware]
+        Cache[Redis Cache]
+        Events[Kafka Events]
+    end
+    
+    subgraph "Auth Service Features"
+        Auth[Authentication]
+        Token[Token Management]
+        Perm[Permission Service]
+        User[User Management]
+        Org[Organization Management]
+    end
+```
+## Authentication Flow
+```mermaid
+sequenceDiagram
+    participant F as Frontend
+    participant AG as API Gateway
+    participant AS as Auth Service
+    participant R as Redis
+
+    F->>AG: POST /api/v1/auth/login
+    Note over F,AG: { email, password }
+    
+    AG->>AS: gRPC Authenticate(AuthenticateRequest)
+    Note over AG,AS: { email, password, remember_me }
+    
+    AS->>AS: Verify password (bcrypt)
+    AS->>AS: Generate JWT tokens
+    AS->>R: Cache user session
+    
+    AS-->>AG: AuthenticateResponse
+    Note over AS,AG: { user, access_token, refresh_token }
+    
+    AG-->>F: HTTP 200 OK
+    Note over AG,F: { success: true, data: {...} }
+```
+## gRPC Integration between services
+```mermaid
+sequenceDiagram
+    participant F as Frontend
+    participant AG as API Gateway
+    participant AS as Auth Service
+    participant R as Redis
+    participant DB as Database
+
+    F->>AG: HTTP Request with JWT
+    AG->>AS: gRPC ValidateToken()
+    AS->>R: Check token blacklist
+    AS->>AS: Verify JWT signature
+    AS-->>AG: Token validation result
+    AG->>AS: gRPC CheckPermission()
+    AS->>R: Check cached permissions
+    alt Cache Miss
+        AS->>DB: Query user roles & permissions
+        AS->>R: Cache permissions
+    end
+    AS-->>AG: Permission check result
+    AG->>AG: Process authorized request
+    AG-->>F: HTTP Response
+```
+
+```mermaid
 flowchart TD
     Client[Client]
     APIGateway[API Gateway]

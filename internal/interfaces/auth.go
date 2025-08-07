@@ -14,14 +14,15 @@ type JWTValidator interface {
 
 // Claims represents the JWT token claims
 type Claims struct {
-	UserID      string   `json:"user_id"`
-	Email       string   `json:"email"`
-	Roles       []string `json:"roles"`
-	Permissions []string `json:"permissions"`
-	ExpiresAt   int64    `json:"exp"`
-	IssuedAt    int64    `json:"iat"`
-	Subject     string   `json:"sub"`
-	Issuer      string   `json:"iss"`
+	UserID         string   `json:"user_id"`
+	OrganizationID string   `json:"organization_id"`
+	Email          string   `json:"email"`
+	Roles          []string `json:"roles"`
+	Permissions    []string `json:"permissions"`
+	ExpiresAt      int64    `json:"exp"`
+	IssuedAt       int64    `json:"iat"`
+	Subject        string   `json:"sub"`
+	Issuer         string   `json:"iss"`
 }
 
 // AuthService defines the interface for authentication operations

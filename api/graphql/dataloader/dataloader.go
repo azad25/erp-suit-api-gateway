@@ -147,7 +147,8 @@ func (ul *UserLoader) executeBatch(ctx context.Context) {
 			continue
 		}
 		
-		if resp.Error != "" {
+		// Only skip if we don't have a user AND there's an error
+		if resp.Error != "" && resp.User == nil {
 			continue
 		}
 		
@@ -198,7 +199,8 @@ func (url *UserRoleLoader) Load(ctx context.Context, userID string) ([]*model.Ro
 		return nil, fmt.Errorf("failed to load user roles: %w", err)
 	}
 	
-	if resp.Error != "" {
+	// Only return error if we don't have a user AND there's an error
+	if resp.Error != "" && resp.User == nil {
 		return nil, fmt.Errorf("failed to load user roles: %s", resp.Error)
 	}
 	
@@ -254,7 +256,8 @@ func (upl *UserPermissionLoader) Load(ctx context.Context, userID string) ([]*mo
 		return nil, fmt.Errorf("failed to load user permissions: %w", err)
 	}
 	
-	if resp.Error != "" {
+	// Only return error if we don't have a user AND there's an error
+	if resp.Error != "" && resp.User == nil {
 		return nil, fmt.Errorf("failed to load user permissions: %s", resp.Error)
 	}
 	

@@ -26,6 +26,10 @@ func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
 	}
 
 	// Fallback to direct gRPC call
+	r.Logger.Info("Getting auth client for user lookup", map[string]interface{}{
+		"user_id": userID,
+	})
+	
 	authClient, err := r.GRPCClient.AuthService(ctx)
 	if err != nil {
 		r.Logger.Error("Failed to get auth client", map[string]interface{}{
@@ -35,6 +39,10 @@ func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
 		return nil, fmt.Errorf("authentication service unavailable")
 	}
 
+	r.Logger.Info("Making gRPC GetUser call", map[string]interface{}{
+		"user_id": userID,
+	})
+
 	resp, err := authClient.GetUser(ctx, &authpb.GetUserRequest{
 		UserId: userID,
 	})
@@ -43,17 +51,53 @@ func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
 		r.Logger.Error("Failed to get current user", map[string]interface{}{
 			"error":   err,
 			"user_id": userID,
+			"error_type": fmt.Sprintf("%T", err),
 		})
 		return nil, fmt.Errorf("failed to get user information")
 	}
 
-	if resp.Error != "" {
-		return nil, fmt.Errorf("failed to get user: %s", resp.Error)
+	r.Logger.Info("gRPC GetUser call completed", map[string]interface{}{
+		"user_id": userID,
+	})
+
+	// Debug logging for response
+	r.Logger.Info("GetUser gRPC response received", map[string]interface{}{
+		"user_id":    userID,
+		"error":      resp.Error,
+		"user_nil":   resp.User == nil,
+		"has_error":  resp.Error != "",
+		"error_len":  len(resp.Error),
+	})
+
+	// Check if we have a user even if there's an error field set
+	if resp.User == nil {
+		r.Logger.Error("GetUser response user is nil", map[string]interface{}{
+			"user_id": userID,
+			"error":   resp.Error,
+		})
+		return nil, fmt.Errorf("user not found: %s", userID)
+	}
+
+	// Only return error if we don't have a user AND there's an actual error
+	if resp.Error != "" && resp.User == nil {
+		r.Logger.Error("GetUser response contains error", map[string]interface{}{
+			"user_id": userID,
+			"error":   resp.Error,
+		})
+		return nil, fmt.Errorf("user not found: %s", userID)
 	}
 
 	if resp.User == nil {
+		r.Logger.Error("GetUser response user is nil", map[string]interface{}{
+			"user_id": userID,
+		})
 		return nil, fmt.Errorf("user not found")
 	}
+
+	r.Logger.Info("Converting user to GraphQL", map[string]interface{}{
+		"user_id": userID,
+		"email":   resp.User.Email,
+	})
 
 	return convertProtoUserToGraphQL(resp.User), nil
 }
@@ -262,13 +306,50 @@ func (r *queryResolver) SecurityStats(ctx context.Context) (*model.SecurityStats
 	// Check if user has admin permission
 	userClaims := ctx.Value("user_claims")
 	if userClaims == nil {
+		r.Logger.Error("SecurityStats: user not authenticated", map[string]interface{}{})
 		return nil, fmt.Errorf("user not authenticated")
 	}
 
-	// Get organization ID from context
+	// Get organization ID from context, fallback to user claims
 	orgID, exists := ctx.Value("organization_id").(string)
 	if !exists {
-		return nil, fmt.Errorf("organization context not found")
+		// Try to get from user_id context and extract from JWT or database
+		userID, userExists := ctx.Value("user_id").(string)
+		if !userExists {
+			r.Logger.Error("SecurityStats: no user context found", map[string]interface{}{})
+			return nil, fmt.Errorf("user context not found")
+		}
+		
+		// Get user info to find organization ID
+		authClient, err := r.GRPCClient.AuthService(ctx)
+		if err != nil {
+			r.Logger.Error("SecurityStats: failed to get auth client for user lookup", map[string]interface{}{
+				"error": err,
+			})
+			return nil, fmt.Errorf("authentication service unavailable")
+		}
+		
+		userResp, err := authClient.GetUser(ctx, &authpb.GetUserRequest{
+			UserId: userID,
+		})
+		
+		if err != nil || userResp.Error != "" || userResp.User == nil {
+			r.Logger.Error("SecurityStats: failed to get user for org lookup", map[string]interface{}{
+				"error": err,
+				"user_id": userID,
+			})
+			return nil, fmt.Errorf("failed to get user organization")
+		}
+		
+		orgID = userResp.User.OrganizationId
+		r.Logger.Info("SecurityStats: got org ID from user lookup", map[string]interface{}{
+			"user_id": userID,
+			"org_id": orgID,
+		})
+	} else {
+		r.Logger.Info("SecurityStats: got org ID from context", map[string]interface{}{
+			"org_id": orgID,
+		})
 	}
 
 	// Call auth service via gRPC

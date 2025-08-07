@@ -9,10 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/lestrrat-go/jwx/v2/jwk"
 	"erp-api-gateway/internal/config"
 	"erp-api-gateway/internal/interfaces"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 // JWTValidator implements the JWT validation interface
@@ -69,7 +70,7 @@ func (v *JWTValidator) ValidateToken(tokenString string) (*interfaces.Claims, er
 				return nil, fmt.Errorf("JWT secret not configured for HMAC signing")
 			}
 			return []byte(v.config.Secret), nil
-			
+
 		case "RS256", "RS384", "RS512", "ES256", "ES384", "ES512":
 			// RSA/ECDSA signing method - use public key from JWKS
 			keyID, ok := token.Header["kid"].(string)
@@ -77,7 +78,7 @@ func (v *JWTValidator) ValidateToken(tokenString string) (*interfaces.Claims, er
 				return nil, fmt.Errorf("missing key ID in token header")
 			}
 			return v.GetPublicKey(keyID)
-			
+
 		default:
 			return nil, fmt.Errorf("unsupported signing method: %s", v.config.Algorithm)
 		}
@@ -213,6 +214,11 @@ func (v *JWTValidator) mapClaimsToStruct(claims jwt.MapClaims) (*interfaces.Clai
 	} else if sub, ok := claims["sub"].(string); ok {
 		userClaims.UserID = sub
 		userClaims.Subject = sub
+	}
+
+	// Extract organization ID
+	if orgID, ok := claims["organization_id"].(string); ok {
+		userClaims.OrganizationID = orgID
 	}
 
 	// Extract email

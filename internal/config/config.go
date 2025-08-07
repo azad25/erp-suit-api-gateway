@@ -15,16 +15,16 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Server     ServerConfig         `yaml:"server"`
-	Database   DatabaseConfig       `yaml:"database"`
-	Redis      RedisConfig          `yaml:"redis"`
-	Kafka      KafkaConfig          `yaml:"kafka"`
-	GRPC       GRPCConfig           `yaml:"grpc"`
-	GraphQL    GraphQLConfig        `yaml:"graphql"`
-	WebSocket  WebSocketConfig      `yaml:"websocket"`
-	Health     HealthConfig         `yaml:"health"`
-	JWT        JWTConfig            `yaml:"jwt"`
-	Logging    LoggingConfig        `yaml:"logging"`
+	Server         ServerConfig         `yaml:"server"`
+	Database       DatabaseConfig       `yaml:"database"`
+	Redis          RedisConfig          `yaml:"redis"`
+	Kafka          KafkaConfig          `yaml:"kafka"`
+	GRPC           GRPCConfig           `yaml:"grpc"`
+	GraphQL        GraphQLConfig        `yaml:"graphql"`
+	WebSocket      WebSocketConfig      `yaml:"websocket"`
+	Health         HealthConfig         `yaml:"health"`
+	JWT            JWTConfig            `yaml:"jwt"`
+	Logging        LoggingConfig        `yaml:"logging"`
 	CircuitBreaker CircuitBreakerConfig `yaml:"circuit_breaker"`
 }
 
@@ -83,45 +83,43 @@ type KafkaConfig struct {
 
 // GRPCConfig represents gRPC services configuration
 type GRPCConfig struct {
-	AuthService           ServiceConfig `yaml:"auth_service"`
-	CRMService            ServiceConfig `yaml:"crm_service"`
-	HRMService            ServiceConfig `yaml:"hrm_service"`
-	FinanceService        ServiceConfig `yaml:"finance_service"`
-	AuthServiceAddress    string        `yaml:"auth_service_address"`
-	CRMServiceAddress     string        `yaml:"crm_service_address"`
-	HRMServiceAddress     string        `yaml:"hrm_service_address"`
-	FinanceServiceAddress string        `yaml:"finance_service_address"`
-	ServiceKey            string        `yaml:"service_key" env:"GRPC_SERVICE_KEY"`
-	ConsulAddress         string        `yaml:"consul_address"`
-	MaxRetries            int           `yaml:"max_retries"`
-	RetryInitialInterval  time.Duration `yaml:"retry_initial_interval"`
-	RetryMaxInterval      time.Duration `yaml:"retry_max_interval"`
-	RetryMultiplier       float64       `yaml:"retry_multiplier"`
-	RetryRandomFactor     float64       `yaml:"retry_random_factor"`
-	MaxConnections        int           `yaml:"max_connections"`
-	ConnectTimeout        time.Duration `yaml:"connect_timeout"`
-	MaxIdleTime           time.Duration `yaml:"max_idle_time"`
-	MaxConnectionAge      time.Duration `yaml:"max_connection_age"`
-	KeepAliveTime         time.Duration `yaml:"keep_alive_time"`
-	KeepAliveTimeout      time.Duration `yaml:"keep_alive_timeout"`
-	EnableHealthCheck     bool          `yaml:"enable_health_check"`
-	HealthCheckInterval   time.Duration `yaml:"health_check_interval"`
-	CircuitBreakerMaxRequests uint32    `yaml:"circuit_breaker_max_requests"`
+	AuthService               ServiceConfig `yaml:"auth_service"`
+	CRMService                ServiceConfig `yaml:"crm_service"`
+	HRMService                ServiceConfig `yaml:"hrm_service"`
+	FinanceService            ServiceConfig `yaml:"finance_service"`
+	AuthServiceAddress        string        `yaml:"auth_service_address"`
+	CRMServiceAddress         string        `yaml:"crm_service_address"`
+	HRMServiceAddress         string        `yaml:"hrm_service_address"`
+	FinanceServiceAddress     string        `yaml:"finance_service_address"`
+	ServiceKey                string        `yaml:"service_key" env:"GRPC_SERVICE_KEY"`
+	ConsulAddress             string        `yaml:"consul_address"`
+	MaxRetries                int           `yaml:"max_retries"`
+	RetryInitialInterval      time.Duration `yaml:"retry_initial_interval"`
+	RetryMaxInterval          time.Duration `yaml:"retry_max_interval"`
+	RetryMultiplier           float64       `yaml:"retry_multiplier"`
+	RetryRandomFactor         float64       `yaml:"retry_random_factor"`
+	MaxConnections            int           `yaml:"max_connections"`
+	ConnectTimeout            time.Duration `yaml:"connect_timeout"`
+	MaxIdleTime               time.Duration `yaml:"max_idle_time"`
+	MaxConnectionAge          time.Duration `yaml:"max_connection_age"`
+	KeepAliveTime             time.Duration `yaml:"keep_alive_time"`
+	KeepAliveTimeout          time.Duration `yaml:"keep_alive_timeout"`
+	EnableHealthCheck         bool          `yaml:"enable_health_check"`
+	HealthCheckInterval       time.Duration `yaml:"health_check_interval"`
+	CircuitBreakerMaxRequests uint32        `yaml:"circuit_breaker_max_requests"`
 	CircuitBreakerInterval    time.Duration `yaml:"circuit_breaker_interval"`
 	CircuitBreakerTimeout     time.Duration `yaml:"circuit_breaker_timeout"`
 }
 
 // ServiceConfig represents individual service configuration
 type ServiceConfig struct {
-	Host            string                  `yaml:"host" json:"host" env:"HOST" validate:"required"`
-	Port            int                     `yaml:"port" json:"port" env:"PORT" validate:"min=1,max=65535"`
-	Timeout         time.Duration           `yaml:"timeout" json:"timeout" env:"TIMEOUT"`
-	MaxRetries      int                     `yaml:"max_retries" json:"max_retries" env:"MAX_RETRIES" validate:"min=0"`
-	RetryBackoff    time.Duration           `yaml:"retry_backoff" json:"retry_backoff" env:"RETRY_BACKOFF"`
-	CircuitBreaker  CircuitBreakerSettings  `yaml:"circuit_breaker" json:"circuit_breaker"`
+	Host           string                 `yaml:"host" json:"host" env:"HOST" validate:"required"`
+	Port           int                    `yaml:"port" json:"port" env:"PORT" validate:"min=1,max=65535"`
+	Timeout        time.Duration          `yaml:"timeout" json:"timeout" env:"TIMEOUT"`
+	MaxRetries     int                    `yaml:"max_retries" json:"max_retries" env:"MAX_RETRIES" validate:"min=0"`
+	RetryBackoff   time.Duration          `yaml:"retry_backoff" json:"retry_backoff" env:"RETRY_BACKOFF"`
+	CircuitBreaker CircuitBreakerSettings `yaml:"circuit_breaker" json:"circuit_breaker"`
 }
-
-
 
 // JWTConfig represents JWT configuration
 type JWTConfig struct {
@@ -135,12 +133,12 @@ type JWTConfig struct {
 
 // LoggingConfig represents logging configuration
 type LoggingConfig struct {
-	Level           string            `yaml:"level" json:"level" env:"LOG_LEVEL" validate:"oneof=debug info warn error fatal"`
-	Format          string            `yaml:"format" json:"format" env:"LOG_FORMAT" validate:"oneof=json text"`
-	Output          string            `yaml:"output" json:"output" env:"LOG_OUTPUT" validate:"oneof=stdout stderr file"`
-	Elasticsearch   ElasticsearchConfig `yaml:"elasticsearch" json:"elasticsearch"`
-	BufferSize      int               `yaml:"buffer_size" json:"buffer_size" env:"LOG_BUFFER_SIZE" validate:"min=1"`
-	FlushInterval   time.Duration     `yaml:"flush_interval" json:"flush_interval" env:"LOG_FLUSH_INTERVAL"`
+	Level         string              `yaml:"level" json:"level" env:"LOG_LEVEL" validate:"oneof=debug info warn error fatal"`
+	Format        string              `yaml:"format" json:"format" env:"LOG_FORMAT" validate:"oneof=json text"`
+	Output        string              `yaml:"output" json:"output" env:"LOG_OUTPUT" validate:"oneof=stdout stderr file"`
+	Elasticsearch ElasticsearchConfig `yaml:"elasticsearch" json:"elasticsearch"`
+	BufferSize    int                 `yaml:"buffer_size" json:"buffer_size" env:"LOG_BUFFER_SIZE" validate:"min=1"`
+	FlushInterval time.Duration       `yaml:"flush_interval" json:"flush_interval" env:"LOG_FLUSH_INTERVAL"`
 }
 
 // ElasticsearchConfig represents Elasticsearch configuration
@@ -171,33 +169,32 @@ type HealthConfig struct {
 
 // WebSocketConfig represents WebSocket configuration
 type WebSocketConfig struct {
-	ServerHost  string        `yaml:"server_host" json:"server_host" env:"WEBSOCKET_SERVER_HOST" validate:"required"`
-	ServerPort  int           `yaml:"server_port" json:"server_port" env:"WEBSOCKET_SERVER_PORT" validate:"min=1,max=65535"`
-	Endpoint    string        `yaml:"endpoint" json:"endpoint" env:"WEBSOCKET_ENDPOINT"`
-	Timeout     time.Duration `yaml:"timeout" json:"timeout" env:"WEBSOCKET_TIMEOUT"`
-	EnableCORS  bool          `yaml:"enable_cors" json:"enable_cors" env:"WEBSOCKET_ENABLE_CORS"`
-	ReadBufferSize       int           `yaml:"read_buffer_size" json:"read_buffer_size" env:"WS_READ_BUFFER_SIZE" validate:"min=1024"`
-	WriteBufferSize      int           `yaml:"write_buffer_size" json:"write_buffer_size" env:"WS_WRITE_BUFFER_SIZE" validate:"min=1024"`
-	HandshakeTimeout     time.Duration `yaml:"handshake_timeout" json:"handshake_timeout" env:"WS_HANDSHAKE_TIMEOUT"`
-	ReadTimeout          time.Duration `yaml:"read_timeout" json:"read_timeout" env:"WS_READ_TIMEOUT"`
-	WriteTimeout         time.Duration `yaml:"write_timeout" json:"write_timeout" env:"WS_WRITE_TIMEOUT"`
-	PongTimeout          time.Duration `yaml:"pong_timeout" json:"pong_timeout" env:"WS_PONG_TIMEOUT"`
-	PingPeriod           time.Duration `yaml:"ping_period" json:"ping_period" env:"WS_PING_PERIOD"`
-	MaxMessageSize       int64         `yaml:"max_message_size" json:"max_message_size" env:"WS_MAX_MESSAGE_SIZE" validate:"min=1024"`
-	MaxConnections       int           `yaml:"max_connections" json:"max_connections" env:"WS_MAX_CONNECTIONS" validate:"min=1"`
-	AllowedOrigins       []string      `yaml:"allowed_origins" json:"allowed_origins" env:"WS_ALLOWED_ORIGINS"`
-	EnableCompression    bool          `yaml:"enable_compression" json:"enable_compression" env:"WS_ENABLE_COMPRESSION"`
-	CompressionLevel     int           `yaml:"compression_level" json:"compression_level" env:"WS_COMPRESSION_LEVEL" validate:"min=-1,max=9"`
+	ServerHost        string        `yaml:"server_host" json:"server_host" env:"WEBSOCKET_SERVER_HOST" validate:"required"`
+	ServerPort        int           `yaml:"server_port" json:"server_port" env:"WEBSOCKET_SERVER_PORT" validate:"min=1,max=65535"`
+	Endpoint          string        `yaml:"endpoint" json:"endpoint" env:"WEBSOCKET_ENDPOINT"`
+	Timeout           time.Duration `yaml:"timeout" json:"timeout" env:"WEBSOCKET_TIMEOUT"`
+	EnableCORS        bool          `yaml:"enable_cors" json:"enable_cors" env:"WEBSOCKET_ENABLE_CORS"`
+	ReadBufferSize    int           `yaml:"read_buffer_size" json:"read_buffer_size" env:"WS_READ_BUFFER_SIZE" validate:"min=1024"`
+	WriteBufferSize   int           `yaml:"write_buffer_size" json:"write_buffer_size" env:"WS_WRITE_BUFFER_SIZE" validate:"min=1024"`
+	HandshakeTimeout  time.Duration `yaml:"handshake_timeout" json:"handshake_timeout" env:"WS_HANDSHAKE_TIMEOUT"`
+	ReadTimeout       time.Duration `yaml:"read_timeout" json:"read_timeout" env:"WS_READ_TIMEOUT"`
+	WriteTimeout      time.Duration `yaml:"write_timeout" json:"write_timeout" env:"WS_WRITE_TIMEOUT"`
+	PongTimeout       time.Duration `yaml:"pong_timeout" json:"pong_timeout" env:"WS_PONG_TIMEOUT"`
+	PingPeriod        time.Duration `yaml:"ping_period" json:"ping_period" env:"WS_PING_PERIOD"`
+	MaxMessageSize    int64         `yaml:"max_message_size" json:"max_message_size" env:"WS_MAX_MESSAGE_SIZE" validate:"min=1024"`
+	MaxConnections    int           `yaml:"max_connections" json:"max_connections" env:"WS_MAX_CONNECTIONS" validate:"min=1"`
+	AllowedOrigins    []string      `yaml:"allowed_origins" json:"allowed_origins" env:"WS_ALLOWED_ORIGINS"`
+	EnableCompression bool          `yaml:"enable_compression" json:"enable_compression" env:"WS_ENABLE_COMPRESSION"`
+	CompressionLevel  int           `yaml:"compression_level" json:"compression_level" env:"WS_COMPRESSION_LEVEL" validate:"min=-1,max=9"`
 }
-
 
 // Load loads configuration from file and environment variables
 func Load() (*Config, error) {
 	cfg := &Config{}
-	
+
 	// Set defaults
 	setDefaults(cfg)
-	
+
 	// Load from config file if exists
 	if configFile := os.Getenv("CONFIG_FILE"); configFile != "" {
 		if err := loadFromFile(cfg, configFile); err != nil {
@@ -206,45 +203,45 @@ func Load() (*Config, error) {
 		// Sync service addresses after loading from file
 		syncServiceAddresses(cfg)
 	}
-	
+
 	// Override with environment variables
 	if err := loadFromEnv(cfg); err != nil {
 		return nil, fmt.Errorf("failed to load environment variables: %w", err)
 	}
-	
+
 	// Validate configuration
 	if err := validate(cfg); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
-	
+
 	return cfg, nil
 }
 
 // LoadFromPath loads configuration from a specific file path
 func LoadFromPath(configPath string) (*Config, error) {
 	cfg := &Config{}
-	
+
 	// Set defaults
 	setDefaults(cfg)
-	
+
 	// Load from specified config file
 	if err := loadFromFile(cfg, configPath); err != nil {
 		return nil, fmt.Errorf("failed to load config file %s: %w", configPath, err)
 	}
-	
+
 	// Sync service addresses after loading from file
 	syncServiceAddresses(cfg)
-	
+
 	// Override with environment variables
 	if err := loadFromEnv(cfg); err != nil {
 		return nil, fmt.Errorf("failed to load environment variables: %w", err)
 	}
-	
+
 	// Validate configuration
 	if err := validate(cfg); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
-	
+
 	return cfg, nil
 }
 
@@ -256,14 +253,14 @@ func setDefaults(cfg *Config) {
 	cfg.Server.ReadTimeout = 30 * time.Second
 	cfg.Server.WriteTimeout = 30 * time.Second
 	cfg.Server.ShutdownTimeout = 10 * time.Second
-	
+
 	// CORS defaults
 	cfg.Server.CORS.AllowedOrigins = []string{"http://localhost:3000", "http://localhost:3001"}
 	cfg.Server.CORS.AllowedMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"}
 	cfg.Server.CORS.AllowedHeaders = []string{"Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"}
 	cfg.Server.CORS.AllowCredentials = true
 	cfg.Server.CORS.MaxAge = 86400
-	
+
 	// Database defaults
 	cfg.Database.Host = "localhost"
 	cfg.Database.Port = 5432
@@ -271,7 +268,7 @@ func setDefaults(cfg *Config) {
 	cfg.Database.User = "postgres"
 	cfg.Database.Password = "postgres"
 	cfg.Database.SSLMode = "disable"
-	
+
 	// Redis defaults
 	cfg.Redis.Host = "localhost"
 	cfg.Redis.Port = 6379
@@ -281,7 +278,7 @@ func setDefaults(cfg *Config) {
 	cfg.Redis.DialTimeout = 5 * time.Second
 	cfg.Redis.ReadTimeout = 3 * time.Second
 	cfg.Redis.WriteTimeout = 3 * time.Second
-	
+
 	// Kafka defaults
 	cfg.Kafka.Brokers = []string{"localhost:9092"}
 	cfg.Kafka.ClientID = "erp-api-gateway"
@@ -290,29 +287,29 @@ func setDefaults(cfg *Config) {
 	cfg.Kafka.FlushMessages = 100
 	cfg.Kafka.FlushBytes = 1024 * 1024
 	cfg.Kafka.FlushTimeout = 1 * time.Second
-	
+
 	// gRPC service defaults
 	setServiceDefaults(&cfg.GRPC.AuthService, "localhost", 50051)
 	setServiceDefaults(&cfg.GRPC.CRMService, "localhost", 50052)
 	setServiceDefaults(&cfg.GRPC.HRMService, "localhost", 50053)
 	setServiceDefaults(&cfg.GRPC.FinanceService, "localhost", 50054)
-	
+
 	// Set service address strings for backward compatibility
 	cfg.GRPC.AuthServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.AuthService.Host, cfg.GRPC.AuthService.Port)
 	cfg.GRPC.CRMServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.CRMService.Host, cfg.GRPC.CRMService.Port)
 	cfg.GRPC.HRMServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.HRMService.Host, cfg.GRPC.HRMService.Port)
 	cfg.GRPC.FinanceServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.FinanceService.Host, cfg.GRPC.FinanceService.Port)
-	
+
 	// Set default service key for internal service authentication
 	cfg.GRPC.ServiceKey = "internal-service-key"
-	
+
 	// JWT defaults
 	cfg.JWT.Algorithm = "HS256"
 	cfg.JWT.Secret = "your-super-secret-jwt-key-change-in-production"
 	cfg.JWT.CacheTTL = 1 * time.Hour
 	cfg.JWT.Issuer = "erp-auth-service"
 	cfg.JWT.JWKSUrl = "http://localhost:8081/.well-known/jwks.json"
-	
+
 	// Logging defaults
 	cfg.Logging.Level = "info"
 	cfg.Logging.Format = "json"
@@ -321,20 +318,17 @@ func setDefaults(cfg *Config) {
 	cfg.Logging.FlushInterval = 5 * time.Second
 	cfg.Logging.Elasticsearch.URLs = []string{"http://localhost:9200"}
 	cfg.Logging.Elasticsearch.IndexName = "erp-api-gateway-logs"
-	
+
 	// WebSocket defaults
 	cfg.WebSocket.ReadBufferSize = 4096
 	cfg.WebSocket.WriteBufferSize = 4096
-	cfg.WebSocket.HandshakeTimeout = 10 * time.Second
-	cfg.WebSocket.ReadTimeout = 60 * time.Second
-	cfg.WebSocket.WriteTimeout = 10 * time.Second
-	cfg.WebSocket.PongTimeout = 60 * time.Second
-	cfg.WebSocket.PingPeriod = 54 * time.Second // Must be less than PongTimeout
-	cfg.WebSocket.MaxMessageSize = 1024 * 1024  // 1MB
+	cfg.WebSocket.HandshakeTimeout = 30 * time.Second // Increased from 10s
+	cfg.WebSocket.ReadTimeout = 120 * time.Second     // Increased from 60s
+	cfg.WebSocket.WriteTimeout = 30 * time.Second     // Increased from 10s
+	cfg.WebSocket.PongTimeout = 120 * time.Second     // Increased from 60s
+	cfg.WebSocket.PingPeriod = 54 * time.Second       // Keep less than PongTimeout
+	cfg.WebSocket.MaxMessageSize = 1024 * 1024        // 1MB
 	cfg.WebSocket.MaxConnections = 10000
-	cfg.WebSocket.AllowedOrigins = []string{"http://localhost:3000", "http://localhost:3001"}
-	cfg.WebSocket.EnableCompression = true
-	cfg.WebSocket.CompressionLevel = 1
 }
 
 // setServiceDefaults sets default values for a service configuration
@@ -364,7 +358,7 @@ func loadFromFile(cfg *Config, filename string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
-	
+
 	// Determine file format based on extension
 	ext := strings.ToLower(filepath.Ext(filename))
 	switch ext {
@@ -384,7 +378,7 @@ func loadFromFile(cfg *Config, filename string) error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -396,16 +390,16 @@ func loadFromEnv(cfg *Config) error {
 // loadEnvVars recursively loads environment variables into struct fields
 func loadEnvVars(v reflect.Value, prefix string) error {
 	t := v.Type()
-	
+
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
 		fieldType := t.Field(i)
-		
+
 		// Skip unexported fields
 		if !field.CanSet() {
 			continue
 		}
-		
+
 		// Get environment variable name from tag
 		envTag := fieldType.Tag.Get("env")
 		if envTag != "" {
@@ -424,7 +418,7 @@ func loadEnvVars(v reflect.Value, prefix string) error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -433,7 +427,7 @@ func setFieldValue(field reflect.Value, value string) error {
 	switch field.Kind() {
 	case reflect.String:
 		field.SetString(value)
-		
+
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		if field.Type() == reflect.TypeOf(time.Duration(0)) {
 			// Handle time.Duration
@@ -450,14 +444,14 @@ func setFieldValue(field reflect.Value, value string) error {
 			}
 			field.SetInt(intVal)
 		}
-		
+
 	case reflect.Bool:
 		boolVal, err := strconv.ParseBool(value)
 		if err != nil {
 			return fmt.Errorf("invalid boolean: %w", err)
 		}
 		field.SetBool(boolVal)
-		
+
 	case reflect.Slice:
 		if field.Type().Elem().Kind() == reflect.String {
 			// Handle string slices (comma-separated values)
@@ -469,11 +463,11 @@ func setFieldValue(field reflect.Value, value string) error {
 		} else {
 			return fmt.Errorf("unsupported slice type: %s", field.Type())
 		}
-		
+
 	default:
 		return fmt.Errorf("unsupported field type: %s", field.Kind())
 	}
-	
+
 	return nil
 }
 
@@ -483,42 +477,42 @@ func validate(cfg *Config) error {
 	if err := validateServer(&cfg.Server); err != nil {
 		return fmt.Errorf("server config validation failed: %w", err)
 	}
-	
+
 	// Validate database configuration
 	if err := validateDatabase(&cfg.Database); err != nil {
 		return fmt.Errorf("database config validation failed: %w", err)
 	}
-	
+
 	// Validate Redis configuration
 	if err := validateRedis(&cfg.Redis); err != nil {
 		return fmt.Errorf("redis config validation failed: %w", err)
 	}
-	
+
 	// Validate Kafka configuration
 	if err := validateKafka(&cfg.Kafka); err != nil {
 		return fmt.Errorf("kafka config validation failed: %w", err)
 	}
-	
+
 	// Validate gRPC configuration
 	if err := validateGRPC(&cfg.GRPC); err != nil {
 		return fmt.Errorf("grpc config validation failed: %w", err)
 	}
-	
+
 	// Validate JWT configuration
 	if err := validateJWT(&cfg.JWT); err != nil {
 		return fmt.Errorf("jwt config validation failed: %w", err)
 	}
-	
+
 	// Validate logging configuration
 	if err := validateLogging(&cfg.Logging); err != nil {
 		return fmt.Errorf("logging config validation failed: %w", err)
 	}
-	
+
 	// Validate WebSocket configuration
 	if err := validateWebSocket(&cfg.WebSocket); err != nil {
 		return fmt.Errorf("websocket config validation failed: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -527,23 +521,23 @@ func validateServer(cfg *ServerConfig) error {
 	if cfg.Port <= 0 || cfg.Port > 65535 {
 		return fmt.Errorf("invalid port: %d (must be between 1 and 65535)", cfg.Port)
 	}
-	
+
 	if cfg.Host == "" {
 		return fmt.Errorf("host cannot be empty")
 	}
-	
+
 	if cfg.ReadTimeout <= 0 {
 		return fmt.Errorf("read timeout must be positive")
 	}
-	
+
 	if cfg.WriteTimeout <= 0 {
 		return fmt.Errorf("write timeout must be positive")
 	}
-	
+
 	if cfg.ShutdownTimeout <= 0 {
 		return fmt.Errorf("shutdown timeout must be positive")
 	}
-	
+
 	return validateCORS(&cfg.CORS)
 }
 
@@ -552,15 +546,15 @@ func validateCORS(cfg *CORSConfig) error {
 	if len(cfg.AllowedOrigins) == 0 {
 		return fmt.Errorf("allowed origins cannot be empty")
 	}
-	
+
 	if len(cfg.AllowedMethods) == 0 {
 		return fmt.Errorf("allowed methods cannot be empty")
 	}
-	
+
 	if cfg.MaxAge < 0 {
 		return fmt.Errorf("max age cannot be negative")
 	}
-	
+
 	return nil
 }
 
@@ -569,24 +563,24 @@ func validateDatabase(cfg *DatabaseConfig) error {
 	if cfg.Host == "" {
 		return fmt.Errorf("host cannot be empty")
 	}
-	
+
 	if cfg.Port <= 0 || cfg.Port > 65535 {
 		return fmt.Errorf("invalid port: %d", cfg.Port)
 	}
-	
+
 	if cfg.Name == "" {
 		return fmt.Errorf("database name cannot be empty")
 	}
-	
+
 	if cfg.User == "" {
 		return fmt.Errorf("user cannot be empty")
 	}
-	
+
 	validSSLModes := []string{"disable", "require", "verify-ca", "verify-full"}
 	if cfg.SSLMode != "" && !contains(validSSLModes, cfg.SSLMode) {
 		return fmt.Errorf("invalid ssl_mode: %s (must be one of: %s)", cfg.SSLMode, strings.Join(validSSLModes, ", "))
 	}
-	
+
 	return nil
 }
 
@@ -595,23 +589,23 @@ func validateRedis(cfg *RedisConfig) error {
 	if cfg.Host == "" {
 		return fmt.Errorf("host cannot be empty")
 	}
-	
+
 	if cfg.Port <= 0 || cfg.Port > 65535 {
 		return fmt.Errorf("invalid port: %d", cfg.Port)
 	}
-	
+
 	if cfg.DB < 0 || cfg.DB > 15 {
 		return fmt.Errorf("invalid database: %d (must be between 0 and 15)", cfg.DB)
 	}
-	
+
 	if cfg.PoolSize <= 0 {
 		return fmt.Errorf("pool size must be positive")
 	}
-	
+
 	if cfg.MinIdleConns < 0 {
 		return fmt.Errorf("min idle connections cannot be negative")
 	}
-	
+
 	return nil
 }
 
@@ -620,23 +614,23 @@ func validateKafka(cfg *KafkaConfig) error {
 	if len(cfg.Brokers) == 0 {
 		return fmt.Errorf("brokers cannot be empty")
 	}
-	
+
 	if cfg.ClientID == "" {
 		return fmt.Errorf("client ID cannot be empty")
 	}
-	
+
 	if cfg.RetryMax < 0 {
 		return fmt.Errorf("retry max cannot be negative")
 	}
-	
+
 	if cfg.FlushMessages <= 0 {
 		return fmt.Errorf("flush messages must be positive")
 	}
-	
+
 	if cfg.FlushBytes <= 0 {
 		return fmt.Errorf("flush bytes must be positive")
 	}
-	
+
 	return nil
 }
 
@@ -645,19 +639,19 @@ func validateGRPC(cfg *GRPCConfig) error {
 	if err := validateService("auth_service", &cfg.AuthService); err != nil {
 		return err
 	}
-	
+
 	if err := validateService("crm_service", &cfg.CRMService); err != nil {
 		return err
 	}
-	
+
 	if err := validateService("hrm_service", &cfg.HRMService); err != nil {
 		return err
 	}
-	
+
 	if err := validateService("finance_service", &cfg.FinanceService); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -666,19 +660,19 @@ func validateService(name string, cfg *ServiceConfig) error {
 	if cfg.Host == "" {
 		return fmt.Errorf("%s host cannot be empty", name)
 	}
-	
+
 	if cfg.Port <= 0 || cfg.Port > 65535 {
 		return fmt.Errorf("%s invalid port: %d", name, cfg.Port)
 	}
-	
+
 	if cfg.Timeout <= 0 {
 		return fmt.Errorf("%s timeout must be positive", name)
 	}
-	
+
 	if cfg.MaxRetries < 0 {
 		return fmt.Errorf("%s max retries cannot be negative", name)
 	}
-	
+
 	return validateCircuitBreaker(name, &cfg.CircuitBreaker)
 }
 
@@ -687,19 +681,19 @@ func validateCircuitBreaker(serviceName string, cfg *CircuitBreakerSettings) err
 	if cfg.MaxRequests <= 0 {
 		return fmt.Errorf("%s circuit breaker max requests must be positive", serviceName)
 	}
-	
+
 	if cfg.Timeout <= 0 {
 		return fmt.Errorf("%s circuit breaker timeout must be positive", serviceName)
 	}
-	
+
 	if cfg.Interval <= 0 {
 		return fmt.Errorf("%s circuit breaker interval must be positive", serviceName)
 	}
-	
+
 	if cfg.ReadyToTrip <= 0 {
 		return fmt.Errorf("%s circuit breaker ready to trip must be positive", serviceName)
 	}
-	
+
 	return nil
 }
 
@@ -708,16 +702,16 @@ func validateJWT(cfg *JWTConfig) error {
 	if cfg.PublicKeyPath == "" && cfg.JWKSUrl == "" {
 		return fmt.Errorf("either public key path or JWKS URL must be provided")
 	}
-	
+
 	validAlgorithms := []string{"RS256", "ES256", "HS256"}
 	if cfg.Algorithm != "" && !contains(validAlgorithms, cfg.Algorithm) {
 		return fmt.Errorf("invalid algorithm: %s (must be one of: %s)", cfg.Algorithm, strings.Join(validAlgorithms, ", "))
 	}
-	
+
 	if cfg.CacheTTL <= 0 {
 		return fmt.Errorf("cache TTL must be positive")
 	}
-	
+
 	return nil
 }
 
@@ -727,25 +721,25 @@ func validateLogging(cfg *LoggingConfig) error {
 	if cfg.Level != "" && !contains(validLevels, cfg.Level) {
 		return fmt.Errorf("invalid log level: %s (must be one of: %s)", cfg.Level, strings.Join(validLevels, ", "))
 	}
-	
+
 	validFormats := []string{"json", "text"}
 	if cfg.Format != "" && !contains(validFormats, cfg.Format) {
 		return fmt.Errorf("invalid log format: %s (must be one of: %s)", cfg.Format, strings.Join(validFormats, ", "))
 	}
-	
+
 	validOutputs := []string{"stdout", "stderr", "file"}
 	if cfg.Output != "" && !contains(validOutputs, cfg.Output) {
 		return fmt.Errorf("invalid log output: %s (must be one of: %s)", cfg.Output, strings.Join(validOutputs, ", "))
 	}
-	
+
 	if cfg.BufferSize <= 0 {
 		return fmt.Errorf("buffer size must be positive")
 	}
-	
+
 	if cfg.FlushInterval <= 0 {
 		return fmt.Errorf("flush interval must be positive")
 	}
-	
+
 	return validateElasticsearch(&cfg.Elasticsearch)
 }
 
@@ -754,11 +748,11 @@ func validateElasticsearch(cfg *ElasticsearchConfig) error {
 	if len(cfg.URLs) == 0 {
 		return fmt.Errorf("elasticsearch URLs cannot be empty")
 	}
-	
+
 	if cfg.IndexName == "" {
 		return fmt.Errorf("elasticsearch index name cannot be empty")
 	}
-	
+
 	return nil
 }
 
@@ -767,51 +761,51 @@ func validateWebSocket(cfg *WebSocketConfig) error {
 	if cfg.ReadBufferSize < 1024 {
 		return fmt.Errorf("read buffer size must be at least 1024 bytes")
 	}
-	
+
 	if cfg.WriteBufferSize < 1024 {
 		return fmt.Errorf("write buffer size must be at least 1024 bytes")
 	}
-	
+
 	if cfg.HandshakeTimeout <= 0 {
 		return fmt.Errorf("handshake timeout must be positive")
 	}
-	
+
 	if cfg.ReadTimeout <= 0 {
 		return fmt.Errorf("read timeout must be positive")
 	}
-	
+
 	if cfg.WriteTimeout <= 0 {
 		return fmt.Errorf("write timeout must be positive")
 	}
-	
+
 	if cfg.PongTimeout <= 0 {
 		return fmt.Errorf("pong timeout must be positive")
 	}
-	
+
 	if cfg.PingPeriod <= 0 {
 		return fmt.Errorf("ping period must be positive")
 	}
-	
+
 	if cfg.PingPeriod >= cfg.PongTimeout {
 		return fmt.Errorf("ping period must be less than pong timeout")
 	}
-	
+
 	if cfg.MaxMessageSize < 1024 {
 		return fmt.Errorf("max message size must be at least 1024 bytes")
 	}
-	
+
 	if cfg.MaxConnections <= 0 {
 		return fmt.Errorf("max connections must be positive")
 	}
-	
+
 	if len(cfg.AllowedOrigins) == 0 {
 		return fmt.Errorf("allowed origins cannot be empty")
 	}
-	
+
 	if cfg.CompressionLevel < -1 || cfg.CompressionLevel > 9 {
 		return fmt.Errorf("compression level must be between -1 and 9")
 	}
-	
+
 	return nil
 }
 
@@ -879,7 +873,7 @@ func (cfg *Config) String() string {
 	masked.Database.Password = "***"
 	masked.Redis.Password = "***"
 	masked.Logging.Elasticsearch.Password = "***"
-	
+
 	data, _ := json.MarshalIndent(masked, "", "  ")
 	return string(data)
 }

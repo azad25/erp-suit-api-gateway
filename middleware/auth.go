@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"erp-api-gateway/internal/interfaces"
+
+	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -69,8 +70,10 @@ func (m *AuthMiddleware) ValidateJWT() gin.HandlerFunc {
 		// Store claims in context for use by subsequent handlers
 		c.Set(UserClaimsKey, claims)
 		c.Set(UserIDKey, claims.UserID)
+		c.Set("organization_id", claims.OrganizationID)
 		c.Set(UserRolesKey, claims.Roles)
 		c.Set(UserPermsKey, claims.Permissions)
+		c.Set("jwt_token", token) // Store the original JWT token for gRPC calls
 
 		// Cache user claims for performance (optional)
 		if m.cache != nil {
@@ -118,8 +121,10 @@ func (m *AuthMiddleware) OptionalJWT() gin.HandlerFunc {
 		// Store claims in context for use by subsequent handlers
 		c.Set(UserClaimsKey, claims)
 		c.Set(UserIDKey, claims.UserID)
+		c.Set("organization_id", claims.OrganizationID)
 		c.Set(UserRolesKey, claims.Roles)
 		c.Set(UserPermsKey, claims.Permissions)
+		c.Set("jwt_token", token) // Store the original JWT token for gRPC calls
 
 		// Cache user claims for performance (optional)
 		if m.cache != nil {

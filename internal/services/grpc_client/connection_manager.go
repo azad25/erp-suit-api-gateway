@@ -117,9 +117,20 @@ func (cm *ConnectionManager) createConnection(ctx context.Context, address strin
 		),
 	}
 	
+	// Create interceptor chain
+	var interceptors []grpc.UnaryClientInterceptor
+	
+	// Add auth interceptor (always included)
+	interceptors = append(interceptors, AuthInterceptor())
+	
 	// Add service key interceptor if service key is configured
 	if cm.config.ServiceKey != "" {
-		opts = append(opts, grpc.WithUnaryInterceptor(cm.serviceKeyInterceptor))
+		interceptors = append(interceptors, cm.serviceKeyInterceptor)
+	}
+	
+	// Add interceptor chain to options
+	if len(interceptors) > 0 {
+		opts = append(opts, grpc.WithChainUnaryInterceptor(interceptors...))
 	}
 
 	// Create connection

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/handler/extension"
@@ -43,7 +44,7 @@ func NewGraphQLHandler(
 ) *GraphQLHandler {
 	// Create DataLoader
 	dl := dataloader.NewDataLoader(grpcClient)
-	
+
 	// Create resolver with dependencies
 	resolver := &resolver.Resolver{
 		Config:        cfg,
@@ -53,12 +54,12 @@ func NewGraphQLHandler(
 		KafkaProducer: kafkaProducer,
 		DataLoader:    dl,
 	}
-	
+
 	// Create GraphQL server
 	srv := handler.New(generated.NewExecutableSchema(generated.Config{
 		Resolvers: resolver,
 	}))
-	
+
 	// Configure server
 	srv.AddTransport(transport.Websocket{
 		KeepAlivePingInterval: 10,
@@ -80,16 +81,16 @@ func NewGraphQLHandler(
 	srv.AddTransport(transport.GET{})
 	srv.AddTransport(transport.POST{})
 	srv.AddTransport(transport.MultipartForm{})
-	
+
 	// Add query complexity analysis
 	srv.Use(extension.Introspection{})
 	srv.Use(extension.AutomaticPersistedQuery{
 		Cache: lru.New[string](100),
 	})
-	
+
 	// Add query complexity limits
 	srv.Use(extension.FixedComplexityLimit(1000))
-	
+
 	return &GraphQLHandler{
 		config:        cfg,
 		logger:        logger,
@@ -104,23 +105,80 @@ func NewGraphQLHandler(
 // ServeHTTP handles GraphQL HTTP requests
 func (h *GraphQLHandler) ServeHTTP() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		startTime := time.Now()
+		
+		// Log incoming GraphQL request
+		h.logger.Info("GraphQL request received", map[string]interface{}{
+			"method":      c.Request.Method,
+			"path":        c.Request.URL.Path,
+			"remote_addr": c.ClientIP(),
+			"user_agent":  c.Request.UserAgent(),
+		})
+
 		// Add DataLoader to context
 		ctx := context.WithValue(c.Request.Context(), "dataloader", h.dataLoader)
 		c.Request = c.Request.WithContext(ctx)
-		
+
 		// Add user context if authenticated
-		if userID, exists := c.Get("user_id"); exists {
-			ctx = context.WithValue(ctx, "user_id", userID)
-			c.Request = c.Request.WithContext(ctx)
+		var userID string
+		if uid, exists := c.Get("user_id"); exists {
+			if uidStr, ok := uid.(string); ok {
+				userID = uidStr
+				ctx = context.WithValue(ctx, "user_id", userID)
+				c.Request = c.Request.WithContext(ctx)
+			}
 		}
-		
+
+		// Add organization context if authenticated
+		var orgID string
+		if oid, exists := c.Get("organization_id"); exists {
+			if oidStr, ok := oid.(string); ok {
+				orgID = oidStr
+				ctx = context.WithValue(ctx, "organization_id", orgID)
+				c.Request = c.Request.WithContext(ctx)
+			}
+		}
+
+		// Add JWT token to context for gRPC calls
+		if jwtToken, exists := c.Get("jwt_token"); exists {
+			if tokenStr, ok := jwtToken.(string); ok {
+				ctx = context.WithValue(ctx, "jwt_token", tokenStr)
+				c.Request = c.Request.WithContext(ctx)
+			}
+		}
+
 		if userClaims, exists := c.Get("user_claims"); exists {
 			ctx = context.WithValue(ctx, "user_claims", userClaims)
 			c.Request = c.Request.WithContext(ctx)
 		}
-		
+
+		// Log authentication context
+		if userID != "" {
+			h.logger.Info("GraphQL request authenticated", map[string]interface{}{
+				"user_id": userID,
+				"org_id":  orgID,
+			})
+		} else {
+			h.logger.Info("GraphQL request unauthenticated", map[string]interface{}{})
+		}
+
+		// Create a custom response writer to capture response details
+		responseWriter := &responseCapture{ResponseWriter: c.Writer, statusCode: 200}
+		c.Writer = responseWriter
+
 		// Serve GraphQL
-		h.server.ServeHTTP(c.Writer, c.Request)
+		h.server.ServeHTTP(responseWriter, c.Request)
+
+		// Log GraphQL response
+		duration := time.Since(startTime)
+		h.logger.Info("GraphQL request completed", map[string]interface{}{
+			"user_id":     userID,
+			"org_id":      orgID,
+			"status_code": responseWriter.statusCode,
+			"duration_ms": duration.Milliseconds(),
+			"method":      c.Request.Method,
+			"path":        c.Request.URL.Path,
+		})
 	}
 }
 
@@ -151,4 +209,15 @@ func GetUserIDFromContext(ctx context.Context) (string, bool) {
 // GetUserClaimsFromContext retrieves user claims from context
 func GetUserClaimsFromContext(ctx context.Context) interface{} {
 	return ctx.Value("user_claims")
+}
+
+// responseCapture is a custom response writer to capture response details
+type responseCapture struct {
+	gin.ResponseWriter
+	statusCode int
+}
+
+func (r *responseCapture) WriteHeader(statusCode int) {
+	r.statusCode = statusCode
+	r.ResponseWriter.WriteHeader(statusCode)
 }

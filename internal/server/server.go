@@ -59,7 +59,7 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 
 	// Create router without default middleware
 	router := gin.New()
-	
+
 	// Create WebSocket handler (only if Redis client is available)
 	var wsHandler *ws.Handler
 	if deps.RedisClient != nil {
@@ -70,7 +70,7 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 			deps.JWTValidator,
 		)
 	}
-	
+
 	// Create GraphQL handler (local)
 	graphqlHandler := graphql.NewGraphQLHandler(
 		cfg,
@@ -79,27 +79,27 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 		deps.RedisClient,
 		deps.KafkaProducer,
 	)
-	
+
 	// Note: Removed GraphQL and WebSocket proxies - using local handlers instead
-	
+
 	// Create optimized health manager
 	healthManager := health.NewHealthManager(logging.NewSimpleLogger(deps.Logger))
-	
+
 	// Register health checkers
 	if deps.RedisClient != nil {
 		healthManager.RegisterChecker(health.NewRedisHealthChecker(deps.RedisClient))
 	}
-	
+
 	if deps.GRPCClient != nil {
 		healthManager.RegisterChecker(health.NewGRPCHealthChecker(deps.GRPCClient, "auth"))
 	}
-	
+
 	if deps.KafkaProducer != nil {
 		healthManager.RegisterChecker(health.NewKafkaHealthChecker(deps.KafkaProducer))
 	}
-	
+
 	// Note: Removed health checkers for non-existent infrastructure services
-	
+
 	server := &Server{
 		config:         cfg,
 		router:         router,
@@ -122,7 +122,7 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 
 	server.setupMiddleware()
 	server.setupRoutes()
-	
+
 	return server
 }
 
@@ -130,34 +130,34 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 func (s *Server) Start() error {
 	// Start health manager
 	s.healthManager.Start()
-	
+
 	fmt.Printf("Starting server on %s\n", s.httpServer.Addr)
-	
+
 	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
-	
+
 	return nil
 }
 
 // Shutdown gracefully shuts down the server
 func (s *Server) Shutdown(ctx context.Context) error {
 	fmt.Println("Shutting down server...")
-	
+
 	// Stop health manager
 	s.healthManager.Stop()
-	
+
 	// Close WebSocket handler
 	if s.wsHandler != nil {
 		if err := s.wsHandler.Close(); err != nil {
 			fmt.Printf("Error closing WebSocket handler: %v\n", err)
 		}
 	}
-	
+
 	// Shutdown HTTP server with timeout
 	shutdownCtx, cancel := context.WithTimeout(ctx, s.config.Server.ShutdownTimeout)
 	defer cancel()
-	
+
 	return s.httpServer.Shutdown(shutdownCtx)
 }
 
@@ -167,25 +167,25 @@ func (s *Server) setupMiddleware() {
 	loggingMiddleware := middleware.NewLoggingMiddleware(s.logger)
 	authMiddleware := middleware.NewAuthMiddleware(s.jwtValidator, s.redisClient)
 	rbacMiddleware := middleware.NewRBACMiddleware(s.policyEngine, nil)
-	
+
 	// Recovery middleware (must be first)
 	s.router.Use(loggingMiddleware.PanicRecovery())
-	
+
 	// Request logging middleware
 	s.router.Use(loggingMiddleware.RequestLogger())
-	
+
 	// CORS middleware
 	s.router.Use(s.setupCORS())
-	
+
 	// Rate limiting middleware
 	s.router.Use(s.setupRateLimit())
-	
+
 	// Request timeout middleware
 	s.router.Use(s.setupRequestTimeout())
-	
+
 	// Error logging middleware (should be last)
 	s.router.Use(loggingMiddleware.ErrorLogger())
-	
+
 	// Store middleware instances for use in route setup
 	s.router.Use(func(c *gin.Context) {
 		c.Set("auth_middleware", authMiddleware)
@@ -203,7 +203,7 @@ func (s *Server) setupCORS() gin.HandlerFunc {
 		AllowCredentials: s.config.Server.CORS.AllowCredentials,
 		MaxAge:           time.Duration(s.config.Server.CORS.MaxAge) * time.Second,
 	}
-	
+
 	return cors.New(corsConfig)
 }
 
@@ -211,7 +211,7 @@ func (s *Server) setupCORS() gin.HandlerFunc {
 func (s *Server) setupRateLimit() gin.HandlerFunc {
 	// Create a rate limiter (100 requests per minute per IP)
 	limiter := rate.NewLimiter(rate.Every(time.Minute/100), 100)
-	
+
 	return func(c *gin.Context) {
 		if !limiter.Allow() {
 			c.JSON(http.StatusTooManyRequests, gin.H{
@@ -232,7 +232,7 @@ func (s *Server) setupRequestTimeout() gin.HandlerFunc {
 		// Set a timeout for the request context
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 		defer cancel()
-		
+
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}
@@ -244,16 +244,16 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/health", s.healthCheck)
 	s.router.GET("/ready", s.readinessCheck)
 	s.router.GET("/health/detailed", s.detailedHealthCheck)
-	
+
 	// Metrics endpoint (no authentication required)
 	s.router.GET("/metrics", s.metricsHandler)
-	
+
 	// WebSocket endpoints - using local handler
 	s.router.GET("/ws", s.optionalAuth(), s.handleWebSocket)
-	
+
 	// GraphQL endpoints
 	s.setupGraphQLRoutes()
-	
+
 	// REST API routes
 	s.setupRESTRoutes()
 }
@@ -263,10 +263,10 @@ func (s *Server) setupGraphQLRoutes() {
 	// Use local GraphQL handler directly
 	// POST requests for GraphQL operations - use optional auth to allow both authenticated and unauthenticated queries
 	s.router.POST("/graphql", s.optionalAuth(), s.graphqlHandler.ServeHTTP())
-	
+
 	// GET requests for GraphQL operations (introspection, etc.) - no auth required
 	s.router.GET("/graphql", s.graphqlHandler.ServeHTTP())
-	
+
 	// GraphQL Playground (development only)
 	if s.config.IsDevelopment() {
 		s.router.GET("/playground", s.graphqlHandler.PlaygroundHandler())
@@ -282,7 +282,7 @@ func (s *Server) setupRESTRoutes() {
 		EventPublisher: s.kafkaProducer,
 		Logger:         logging.NewSimpleLogger(s.logger),
 	}
-	
+
 	// Authentication routes (no auth required for login/register)
 	authGroup := s.router.Group("/auth")
 	{
@@ -290,12 +290,12 @@ func (s *Server) setupRESTRoutes() {
 		authGroup.POST("/login/", s.getRESTAuthHandler(routerConfig).Login)
 		authGroup.POST("/register/", s.getRESTAuthHandler(routerConfig).Register)
 		authGroup.POST("/refresh/", s.getRESTAuthHandler(routerConfig).RefreshToken)
-		
+
 		// Protected routes
 		authGroup.POST("/logout/", s.requireAuth(), s.getRESTAuthHandler(routerConfig).Logout)
 		authGroup.GET("/me/", s.requireAuth(), s.getRESTAuthHandler(routerConfig).GetCurrentUser)
 	}
-	
+
 	// API v1 routes
 	v1 := s.router.Group("/api/v1")
 	{
@@ -306,12 +306,12 @@ func (s *Server) setupRESTRoutes() {
 			authV1.POST("/login/", s.getRESTAuthHandler(routerConfig).Login)
 			authV1.POST("/register/", s.getRESTAuthHandler(routerConfig).Register)
 			authV1.POST("/refresh/", s.getRESTAuthHandler(routerConfig).RefreshToken)
-			
+
 			// Protected routes
 			authV1.POST("/logout/", s.requireAuth(), s.getRESTAuthHandler(routerConfig).Logout)
 			authV1.GET("/me/", s.requireAuth(), s.getRESTAuthHandler(routerConfig).GetCurrentUser)
 		}
-		
+
 		// Future API routes will be added here
 		// e.g., CRM, HRM, Finance routes
 	}
@@ -341,7 +341,7 @@ func (s *Server) requireAuth() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		authMW := authMiddleware.(*middleware.AuthMiddleware)
 		authMW.RequireAuth()(c)
 	}
@@ -355,7 +355,7 @@ func (s *Server) optionalAuth() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		
+
 		authMW := authMiddleware.(*middleware.AuthMiddleware)
 		authMW.OptionalJWT()(c)
 	}
@@ -369,7 +369,7 @@ func (s *Server) requirePermission(permission string) gin.HandlerFunc {
 		if c.IsAborted() {
 			return
 		}
-		
+
 		// Then check permission
 		rbacMiddleware, exists := c.Get("rbac_middleware")
 		if !exists {
@@ -380,7 +380,7 @@ func (s *Server) requirePermission(permission string) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		rbacMW := rbacMiddleware.(*middleware.RBACMiddleware)
 		rbacMW.RequirePermission(permission)(c)
 	}
@@ -394,7 +394,7 @@ func (s *Server) requireRole(role string) gin.HandlerFunc {
 		if c.IsAborted() {
 			return
 		}
-		
+
 		// Then check role
 		rbacMiddleware, exists := c.Get("rbac_middleware")
 		if !exists {
@@ -405,7 +405,7 @@ func (s *Server) requireRole(role string) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		rbacMW := rbacMiddleware.(*middleware.RBACMiddleware)
 		rbacMW.RequireRole(role)(c)
 	}
@@ -423,7 +423,7 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	if err := s.wsHandler.HandleConnection(c.Writer, c.Request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -442,7 +442,7 @@ func (s *Server) healthCheck(c *gin.Context) {
 		"service":   "erp-api-gateway",
 		"version":   "1.0.0",
 	}
-	
+
 	c.JSON(http.StatusOK, health)
 }
 
@@ -451,7 +451,7 @@ func (s *Server) readinessCheck(c *gin.Context) {
 	// Get cached health statuses (no blocking calls)
 	statuses := s.healthManager.GetAllStatuses()
 	ready := s.healthManager.IsHealthy()
-	
+
 	// Convert to response format
 	checks := make(map[string]interface{})
 	for name, status := range statuses {
@@ -460,19 +460,19 @@ func (s *Server) readinessCheck(c *gin.Context) {
 			"last_check": status.LastCheck.Unix(),
 			"latency_ms": status.Latency,
 		}
-		
+
 		if status.Error != "" {
 			checks[name].(map[string]interface{})["error"] = status.Error
 		}
 	}
-	
+
 	statusText := "ready"
 	statusCode := http.StatusOK
 	if !ready {
 		statusText = "not_ready"
 		statusCode = http.StatusServiceUnavailable
 	}
-	
+
 	response := gin.H{
 		"status":    statusText,
 		"timestamp": time.Now().Unix(),
@@ -480,7 +480,7 @@ func (s *Server) readinessCheck(c *gin.Context) {
 		"service":   "erp-api-gateway",
 		"version":   "1.0.0",
 	}
-	
+
 	c.JSON(statusCode, response)
 }
 
@@ -488,13 +488,13 @@ func (s *Server) readinessCheck(c *gin.Context) {
 func (s *Server) detailedHealthCheck(c *gin.Context) {
 	// Check if force refresh is requested
 	forceRefresh := c.Query("force") == "true"
-	
+
 	var statuses map[string]*health.HealthStatus
-	
+
 	if forceRefresh {
 		// Force fresh health checks (use sparingly)
 		statuses = make(map[string]*health.HealthStatus)
-		
+
 		// Get list of registered checkers and force check each
 		allStatuses := s.healthManager.GetAllStatuses()
 		for serviceName := range allStatuses {
@@ -504,12 +504,12 @@ func (s *Server) detailedHealthCheck(c *gin.Context) {
 		// Use cached statuses
 		statuses = s.healthManager.GetAllStatuses()
 	}
-	
+
 	// Calculate overall health
 	healthy := 0
 	unhealthy := 0
 	stale := 0
-	
+
 	for _, status := range statuses {
 		switch status.Status {
 		case "healthy":
@@ -520,14 +520,14 @@ func (s *Server) detailedHealthCheck(c *gin.Context) {
 			stale++
 		}
 	}
-	
+
 	overallStatus := "healthy"
 	if unhealthy > 0 {
 		overallStatus = "unhealthy"
 	} else if stale > 0 {
 		overallStatus = "degraded"
 	}
-	
+
 	response := gin.H{
 		"status":    overallStatus,
 		"timestamp": time.Now().Unix(),
@@ -542,14 +542,14 @@ func (s *Server) detailedHealthCheck(c *gin.Context) {
 		"services":      statuses,
 		"force_refresh": forceRefresh,
 	}
-	
+
 	statusCode := http.StatusOK
 	if overallStatus == "unhealthy" {
 		statusCode = http.StatusServiceUnavailable
 	} else if overallStatus == "degraded" {
 		statusCode = http.StatusPartialContent
 	}
-	
+
 	c.JSON(statusCode, response)
 }
 
@@ -569,7 +569,7 @@ websocket_connections_active %d
 # TYPE server_uptime_seconds counter
 server_uptime_seconds %d
 `, s.getWebSocketConnectionCount(), int(time.Now().Unix()))
-	
+
 	c.Header("Content-Type", "text/plain; charset=utf-8")
 	c.String(http.StatusOK, metrics)
 }
