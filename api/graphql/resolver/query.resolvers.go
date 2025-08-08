@@ -422,7 +422,76 @@ func (r *queryResolver) SecurityStats(ctx context.Context) (*model.SecurityStats
 
 // SecurityEvents is the resolver for the securityEvents field.
 func (r *queryResolver) SecurityEvents(ctx context.Context, limit *int, organizationID *string) ([]*model.SecurityEvent, error) {
-	panic(fmt.Errorf("not implemented: SecurityEvents - securityEvents"))
+	// Require auth
+	if ctx.Value("user_claims") == nil {
+		return nil, fmt.Errorf("user not authenticated")
+	}
+
+	// Determine organization scope
+	orgID := ""
+	if organizationID != nil && *organizationID != "" {
+		orgID = *organizationID
+	} else if v, ok := ctx.Value("organization_id").(string); ok {
+		orgID = v
+	}
+
+	// Default limit
+	l := 10
+	if limit != nil && *limit > 0 {
+		l = *limit
+	}
+
+	// Call auth service for recent activities and derive security events
+	authClient, err := r.GRPCClient.AuthService(ctx)
+	if err != nil {
+		r.Logger.Error("SecurityEvents: failed to get auth client", map[string]interface{}{"error": err})
+		return nil, fmt.Errorf("authentication service unavailable")
+	}
+
+	// Fetch a window of recent activities; filter client-side to security events (e.g., login_failed)
+	resp, err := authClient.GetUserActivity(ctx, &authpb.GetUserActivityRequest{
+		OrganizationId: orgID,
+		Limit:          int32(l * 3), // fetch more to allow filtering
+		Offset:         0,
+	})
+	if err != nil || !resp.Success {
+		if err == nil {
+			err = fmt.Errorf(resp.Error)
+		}
+		r.Logger.Error("SecurityEvents: failed to get activities", map[string]interface{}{"error": err})
+		return nil, fmt.Errorf("failed to get security events")
+	}
+
+	events := make([]*model.SecurityEvent, 0, l)
+	for _, a := range resp.Activities {
+		if a.Action != "login_failed" {
+			continue
+		}
+		ev := &model.SecurityEvent{
+			ID:        a.Id,
+			Type:      a.Action,
+			Severity:  "high",
+			Message:   fmt.Sprintf("Failed login attempt from IP %s", a.IpAddress),
+			IPAddress: a.IpAddress,
+			UserAgent: &a.UserAgent,
+			UserEmail: func() *string {
+				if a.User != nil {
+					v := a.User.Email
+					return &v
+				}
+				return nil
+			}(),
+			Timestamp: a.CreatedAt.AsTime().Format("2006-01-02T15:04:05Z07:00"),
+			Details:   func() *string { v := a.Details; return &v }(),
+			Count:     1,
+		}
+		events = append(events, ev)
+		if len(events) >= l {
+			break
+		}
+	}
+
+	return events, nil
 }
 
 // SecurityEvents is the resolver for the securityEvents field.
