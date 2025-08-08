@@ -420,6 +420,12 @@ func (r *queryResolver) SecurityStats(ctx context.Context) (*model.SecurityStats
 	}, nil
 }
 
+// SecurityEvents is the resolver for the securityEvents field.
+func (r *queryResolver) SecurityEvents(ctx context.Context, limit *int, organizationID *string) ([]*model.SecurityEvent, error) {
+	panic(fmt.Errorf("not implemented: SecurityEvents - securityEvents"))
+}
+
+// SecurityEvents is the resolver for the securityEvents field.
 // UserActivity is the resolver for the userActivity field.
 func (r *queryResolver) UserActivity(ctx context.Context, userID *string, limit *int, offset *int) (*model.UserActivityConnection, error) {
 	// Check if user has admin permission
@@ -438,10 +444,38 @@ func (r *queryResolver) UserActivity(ctx context.Context, userID *string, limit 
 		offset = &defaultOffset
 	}
 
-	// Get organization ID from context
-	orgID, exists := ctx.Value("organization_id").(string)
-	if !exists {
-		return nil, fmt.Errorf("organization context not found")
+	// Determine organization ID based on user role
+	var orgID string
+	var isAppAdmin bool
+
+	// Check if user is super admin/app admin
+	if claims, ok := ctx.Value("user_claims").(interface{ GetRoles() []string }); ok {
+		roles := claims.GetRoles()
+		for _, role := range roles {
+			if role == "Super Admin" || role == "super_admin" {
+				isAppAdmin = true
+				break
+			}
+		}
+	}
+
+	if isAppAdmin {
+		// Super admin can view all activities across organizations
+		orgID = "" // Empty string means all organizations
+		r.Logger.Info("UserActivity: Super admin accessing all user activities", map[string]interface{}{
+			"user_id": userID,
+		})
+	} else {
+		// Regular organization admin - restrict to their organization
+		orgIDFromContext, exists := ctx.Value("organization_id").(string)
+		if !exists {
+			return nil, fmt.Errorf("organization context not found")
+		}
+		orgID = orgIDFromContext
+		r.Logger.Info("UserActivity: Organization admin accessing org activities", map[string]interface{}{
+			"user_id": userID,
+			"org_id":  orgID,
+		})
 	}
 
 	// Call auth service via gRPC

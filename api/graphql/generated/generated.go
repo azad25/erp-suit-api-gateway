@@ -209,6 +209,7 @@ type ComplexityRoot struct {
 		Organizations           func(childComplexity int, limit *int, offset *int, search *string, sortBy *string, sortOrder *string) int
 		Permissions             func(childComplexity int) int
 		Roles                   func(childComplexity int) int
+		SecurityEvents          func(childComplexity int, limit *int, organizationID *string) int
 		SecurityStats           func(childComplexity int) int
 		User                    func(childComplexity int, id string) int
 		UserActivity            func(childComplexity int, userID *string, limit *int, offset *int) int
@@ -235,6 +236,19 @@ type ComplexityRoot struct {
 		Message func(childComplexity int) int
 		Role    func(childComplexity int) int
 		Success func(childComplexity int) int
+	}
+
+	SecurityEvent struct {
+		Count     func(childComplexity int) int
+		Details   func(childComplexity int) int
+		ID        func(childComplexity int) int
+		IPAddress func(childComplexity int) int
+		Message   func(childComplexity int) int
+		Severity  func(childComplexity int) int
+		Timestamp func(childComplexity int) int
+		Type      func(childComplexity int) int
+		UserAgent func(childComplexity int) int
+		UserEmail func(childComplexity int) int
 	}
 
 	SecurityStats struct {
@@ -368,6 +382,7 @@ type QueryResolver interface {
 	Users(ctx context.Context, limit *int, offset *int, search *string, sortBy *string, sortOrder *string) (*model.UserConnection, error)
 	UserStats(ctx context.Context) (*model.UserStats, error)
 	SecurityStats(ctx context.Context) (*model.SecurityStats, error)
+	SecurityEvents(ctx context.Context, limit *int, organizationID *string) ([]*model.SecurityEvent, error)
 	UserActivity(ctx context.Context, userID *string, limit *int, offset *int) (*model.UserActivityConnection, error)
 	Roles(ctx context.Context) ([]*model.Role, error)
 	Permissions(ctx context.Context) ([]*model.Permission, error)
@@ -1334,6 +1349,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Query.Roles(childComplexity), true
 
+	case "Query.securityEvents":
+		if e.complexity.Query.SecurityEvents == nil {
+			break
+		}
+
+		args, err := ec.field_Query_securityEvents_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.SecurityEvents(childComplexity, args["limit"].(*int), args["organizationId"].(*string)), true
+
 	case "Query.securityStats":
 		if e.complexity.Query.SecurityStats == nil {
 			break
@@ -1488,6 +1515,76 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.RoleMutationResponse.Success(childComplexity), true
+
+	case "SecurityEvent.count":
+		if e.complexity.SecurityEvent.Count == nil {
+			break
+		}
+
+		return e.complexity.SecurityEvent.Count(childComplexity), true
+
+	case "SecurityEvent.details":
+		if e.complexity.SecurityEvent.Details == nil {
+			break
+		}
+
+		return e.complexity.SecurityEvent.Details(childComplexity), true
+
+	case "SecurityEvent.id":
+		if e.complexity.SecurityEvent.ID == nil {
+			break
+		}
+
+		return e.complexity.SecurityEvent.ID(childComplexity), true
+
+	case "SecurityEvent.ipAddress":
+		if e.complexity.SecurityEvent.IPAddress == nil {
+			break
+		}
+
+		return e.complexity.SecurityEvent.IPAddress(childComplexity), true
+
+	case "SecurityEvent.message":
+		if e.complexity.SecurityEvent.Message == nil {
+			break
+		}
+
+		return e.complexity.SecurityEvent.Message(childComplexity), true
+
+	case "SecurityEvent.severity":
+		if e.complexity.SecurityEvent.Severity == nil {
+			break
+		}
+
+		return e.complexity.SecurityEvent.Severity(childComplexity), true
+
+	case "SecurityEvent.timestamp":
+		if e.complexity.SecurityEvent.Timestamp == nil {
+			break
+		}
+
+		return e.complexity.SecurityEvent.Timestamp(childComplexity), true
+
+	case "SecurityEvent.type":
+		if e.complexity.SecurityEvent.Type == nil {
+			break
+		}
+
+		return e.complexity.SecurityEvent.Type(childComplexity), true
+
+	case "SecurityEvent.userAgent":
+		if e.complexity.SecurityEvent.UserAgent == nil {
+			break
+		}
+
+		return e.complexity.SecurityEvent.UserAgent(childComplexity), true
+
+	case "SecurityEvent.userEmail":
+		if e.complexity.SecurityEvent.UserEmail == nil {
+			break
+		}
+
+		return e.complexity.SecurityEvent.UserEmail(childComplexity), true
 
 	case "SecurityStats.failedLoginsToday":
 		if e.complexity.SecurityStats.FailedLoginsToday == nil {
@@ -2214,6 +2311,14 @@ type Query {
   securityStats: SecurityStats!
 
   """
+  Get recent security alerts (requires admin permission)
+  """
+  securityEvents(
+    limit: Int = 10
+    organizationId: ID
+  ): [SecurityEvent!]!
+
+  """
   Get user activity logs (requires admin permission)
   """
   userActivity(
@@ -2289,6 +2394,8 @@ type Query {
   Get current user's role details with boolean helpers
   """
   userRole: UserRoleInfo!
+
+  # duplicate removed
 }
 
 """
@@ -2769,6 +2876,22 @@ Field-specific error
 type FieldError {
   field: String!
   message: String!
+}
+
+"""
+Security event/alert
+"""
+type SecurityEvent {
+  id: ID!
+  type: String!
+  severity: String!
+  message: String!
+  ipAddress: String!
+  userAgent: String
+  userEmail: String
+  timestamp: String!
+  details: String
+  count: Int!
 }`, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
@@ -3184,6 +3307,22 @@ func (ec *executionContext) field_Query_organizations_args(ctx context.Context, 
 		return nil, err
 	}
 	args["sortOrder"] = arg4
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_securityEvents_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId", ec.unmarshalOID2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg1
 	return args, nil
 }
 
@@ -8824,6 +8963,83 @@ func (ec *executionContext) fieldContext_Query_securityStats(_ context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_securityEvents(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_securityEvents(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().SecurityEvents(rctx, fc.Args["limit"].(*int), fc.Args["organizationId"].(*string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.SecurityEvent)
+	fc.Result = res
+	return ec.marshalNSecurityEvent2ᚕᚖerpᚑapiᚑgatewayᚋapiᚋgraphqlᚋmodelᚐSecurityEventᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_securityEvents(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_SecurityEvent_id(ctx, field)
+			case "type":
+				return ec.fieldContext_SecurityEvent_type(ctx, field)
+			case "severity":
+				return ec.fieldContext_SecurityEvent_severity(ctx, field)
+			case "message":
+				return ec.fieldContext_SecurityEvent_message(ctx, field)
+			case "ipAddress":
+				return ec.fieldContext_SecurityEvent_ipAddress(ctx, field)
+			case "userAgent":
+				return ec.fieldContext_SecurityEvent_userAgent(ctx, field)
+			case "userEmail":
+				return ec.fieldContext_SecurityEvent_userEmail(ctx, field)
+			case "timestamp":
+				return ec.fieldContext_SecurityEvent_timestamp(ctx, field)
+			case "details":
+				return ec.fieldContext_SecurityEvent_details(ctx, field)
+			case "count":
+				return ec.fieldContext_SecurityEvent_count(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type SecurityEvent", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_securityEvents_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_userActivity(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Query_userActivity(ctx, field)
 	if err != nil {
@@ -10301,6 +10517,437 @@ func (ec *executionContext) fieldContext_RoleMutationResponse_errors(_ context.C
 				return ec.fieldContext_FieldError_message(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type FieldError", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SecurityEvent_id(ctx context.Context, field graphql.CollectedField, obj *model.SecurityEvent) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_SecurityEvent_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNID2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_SecurityEvent_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SecurityEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SecurityEvent_type(ctx context.Context, field graphql.CollectedField, obj *model.SecurityEvent) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_SecurityEvent_type(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Type, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_SecurityEvent_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SecurityEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SecurityEvent_severity(ctx context.Context, field graphql.CollectedField, obj *model.SecurityEvent) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_SecurityEvent_severity(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Severity, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_SecurityEvent_severity(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SecurityEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SecurityEvent_message(ctx context.Context, field graphql.CollectedField, obj *model.SecurityEvent) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_SecurityEvent_message(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Message, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_SecurityEvent_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SecurityEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SecurityEvent_ipAddress(ctx context.Context, field graphql.CollectedField, obj *model.SecurityEvent) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_SecurityEvent_ipAddress(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IPAddress, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_SecurityEvent_ipAddress(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SecurityEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SecurityEvent_userAgent(ctx context.Context, field graphql.CollectedField, obj *model.SecurityEvent) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_SecurityEvent_userAgent(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.UserAgent, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_SecurityEvent_userAgent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SecurityEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SecurityEvent_userEmail(ctx context.Context, field graphql.CollectedField, obj *model.SecurityEvent) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_SecurityEvent_userEmail(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.UserEmail, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_SecurityEvent_userEmail(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SecurityEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SecurityEvent_timestamp(ctx context.Context, field graphql.CollectedField, obj *model.SecurityEvent) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_SecurityEvent_timestamp(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Timestamp, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_SecurityEvent_timestamp(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SecurityEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SecurityEvent_details(ctx context.Context, field graphql.CollectedField, obj *model.SecurityEvent) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_SecurityEvent_details(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Details, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_SecurityEvent_details(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SecurityEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SecurityEvent_count(ctx context.Context, field graphql.CollectedField, obj *model.SecurityEvent) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_SecurityEvent_count(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Count, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_SecurityEvent_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SecurityEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -16885,6 +17532,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "securityEvents":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_securityEvents(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "userActivity":
 			field := field
 
@@ -17275,6 +17944,81 @@ func (ec *executionContext) _RoleMutationResponse(ctx context.Context, sel ast.S
 			out.Values[i] = ec._RoleMutationResponse_role(ctx, field, obj)
 		case "errors":
 			out.Values[i] = ec._RoleMutationResponse_errors(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var securityEventImplementors = []string{"SecurityEvent"}
+
+func (ec *executionContext) _SecurityEvent(ctx context.Context, sel ast.SelectionSet, obj *model.SecurityEvent) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, securityEventImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("SecurityEvent")
+		case "id":
+			out.Values[i] = ec._SecurityEvent_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "type":
+			out.Values[i] = ec._SecurityEvent_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "severity":
+			out.Values[i] = ec._SecurityEvent_severity(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "message":
+			out.Values[i] = ec._SecurityEvent_message(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "ipAddress":
+			out.Values[i] = ec._SecurityEvent_ipAddress(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "userAgent":
+			out.Values[i] = ec._SecurityEvent_userAgent(ctx, field, obj)
+		case "userEmail":
+			out.Values[i] = ec._SecurityEvent_userEmail(ctx, field, obj)
+		case "timestamp":
+			out.Values[i] = ec._SecurityEvent_timestamp(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "details":
+			out.Values[i] = ec._SecurityEvent_details(ctx, field, obj)
+		case "count":
+			out.Values[i] = ec._SecurityEvent_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -18890,6 +19634,60 @@ func (ec *executionContext) marshalNRoleMutationResponse2ᚖerpᚑapiᚑgateway�
 		return graphql.Null
 	}
 	return ec._RoleMutationResponse(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNSecurityEvent2ᚕᚖerpᚑapiᚑgatewayᚋapiᚋgraphqlᚋmodelᚐSecurityEventᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.SecurityEvent) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNSecurityEvent2ᚖerpᚑapiᚑgatewayᚋapiᚋgraphqlᚋmodelᚐSecurityEvent(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNSecurityEvent2ᚖerpᚑapiᚑgatewayᚋapiᚋgraphqlᚋmodelᚐSecurityEvent(ctx context.Context, sel ast.SelectionSet, v *model.SecurityEvent) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._SecurityEvent(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNSecurityStats2erpᚑapiᚑgatewayᚋapiᚋgraphqlᚋmodelᚐSecurityStats(ctx context.Context, sel ast.SelectionSet, v model.SecurityStats) graphql.Marshaler {

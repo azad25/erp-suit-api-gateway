@@ -228,6 +228,20 @@ type RoleMutationResponse struct {
 	Errors  []*FieldError `json:"errors,omitempty"`
 }
 
+// Security event/alert
+type SecurityEvent struct {
+	ID        string  `json:"id"`
+	Type      string  `json:"type"`
+	Severity  string  `json:"severity"`
+	Message   string  `json:"message"`
+	IPAddress string  `json:"ipAddress"`
+	UserAgent *string `json:"userAgent,omitempty"`
+	UserEmail *string `json:"userEmail,omitempty"`
+	Timestamp string  `json:"timestamp"`
+	Details   *string `json:"details,omitempty"`
+	Count     int     `json:"count"`
+}
+
 // Security statistics
 type SecurityStats struct {
 	FailedLoginsToday   int `json:"failedLoginsToday"`

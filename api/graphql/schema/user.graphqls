@@ -383,3 +383,19 @@ type FieldError {
   field: String!
   message: String!
 }
+
+"""
+Security event/alert
+"""
+type SecurityEvent {
+  id: ID!
+  type: String!
+  severity: String!
+  message: String!
+  ipAddress: String!
+  userAgent: String
+  userEmail: String
+  timestamp: String!
+  details: String
+  count: Int!
+}

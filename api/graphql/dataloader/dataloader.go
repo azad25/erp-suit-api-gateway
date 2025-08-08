@@ -86,36 +86,40 @@ func (ul *UserLoader) Load(ctx context.Context, userID string) (*model.User, err
 	}
 	ul.mutex.RUnlock()
 	
-	// Add to batch
-	ul.batchMutex.Lock()
-	ul.batch = append(ul.batch, userID)
-	
-	// Start timer if this is the first item in batch
-	if len(ul.batch) == 1 {
-		ul.timer = time.AfterFunc(ul.dataLoader.wait, func() {
-			ul.executeBatch(ctx)
-		})
+	// For now, load directly instead of batching to avoid timing issues
+	// TODO: Implement proper batching with channels or sync.WaitGroup
+	authClient, err := ul.dataLoader.grpcClient.AuthService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get auth client: %w", err)
 	}
 	
-	// Execute immediately if batch is full
-	if len(ul.batch) >= ul.dataLoader.maxBatchSize {
-		if ul.timer != nil {
-			ul.timer.Stop()
-		}
-		ul.executeBatch(ctx)
+	resp, err := authClient.GetUser(ctx, &authpb.GetUserRequest{
+		UserId: userID,
+	})
+	
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
-	ul.batchMutex.Unlock()
 	
-	// Wait for batch execution and return from cache
-	time.Sleep(ul.dataLoader.wait + 1*time.Millisecond)
+	// Check for error in response
+	if resp.Error != "" {
+		return nil, fmt.Errorf("failed to get user: %s", resp.Error)
+	}
 	
-	ul.mutex.RLock()
-	user, exists := ul.cache[userID]
-	ul.mutex.RUnlock()
-	
-	if !exists {
+	// Check if user exists
+	if resp.User == nil {
 		return nil, fmt.Errorf("user not found: %s", userID)
 	}
+	
+	user := helpers.ConvertProtoUserToGraphQL(resp.User)
+	if user == nil {
+		return nil, fmt.Errorf("failed to convert user: %s", userID)
+	}
+	
+	// Cache the result
+	ul.mutex.Lock()
+	ul.cache[userID] = user
+	ul.mutex.Unlock()
 	
 	return user, nil
 }
@@ -147,16 +151,17 @@ func (ul *UserLoader) executeBatch(ctx context.Context) {
 			continue
 		}
 		
-		// Only skip if we don't have a user AND there's an error
-		if resp.Error != "" && resp.User == nil {
+		// Skip if there's an error or no user
+		if resp.Error != "" || resp.User == nil {
 			continue
 		}
 		
 		user := helpers.ConvertProtoUserToGraphQL(resp.User)
-		
-		ul.mutex.Lock()
-		ul.cache[userID] = user
-		ul.mutex.Unlock()
+		if user != nil {
+			ul.mutex.Lock()
+			ul.cache[userID] = user
+			ul.mutex.Unlock()
+		}
 	}
 }
 
