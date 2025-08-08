@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"erp-api-gateway/internal/interfaces"
-	authpb "erp-api-gateway/proto/gen/auth"
+	authpb "erp-api-gateway/proto"
 )
 
 // AuthHandler handles authentication-related HTTP requests

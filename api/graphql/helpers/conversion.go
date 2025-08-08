@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"erp-api-gateway/api/graphql/model"
-	authpb "erp-api-gateway/proto/gen/auth"
+	authpb "erp-api-gateway/proto"
 )
 
 // ConvertProtoUserToGraphQL converts a protobuf User to a GraphQL User model
@@ -47,10 +47,49 @@ func ConvertProtoUserToGraphQL(protoUser *authpb.User) *model.User {
 		}
 	}
 
+	// Initialize empty roles and permissions for now
+	// Roles will be loaded separately when needed
+	user.Roles = []*model.Role{}
+
+	// For now, permissions are handled through roles
+	// If we need direct user permissions, we can add them here
+	user.Permissions = []*model.Permission{}
+
+	return user
+}
+
+// ConvertProtoOrganizationToGraphQL converts a protobuf Organization to a GraphQL Organization model
+func ConvertProtoOrganizationToGraphQL(protoOrg *authpb.Organization) *model.Organization {
+	if protoOrg == nil {
+		return nil
+	}
+
+	org := &model.Organization{
+		ID:              protoOrg.Id,
+		Name:            protoOrg.Name,
+		Domain:          protoOrg.Domain,
+		IsActive:        protoOrg.IsActive,
+		CreatedAt:       protoOrg.CreatedAt.AsTime().Format(time.RFC3339),
+		UpdatedAt:       protoOrg.UpdatedAt.AsTime().Format(time.RFC3339),
+		UserCount:       int(protoOrg.UserCount),
+		ActiveUserCount: int(protoOrg.ActiveUserCount),
+	}
+
+	// Convert users if available
+	if len(protoOrg.Users) > 0 {
+		users := make([]*model.User, len(protoOrg.Users))
+		for i, protoUser := range protoOrg.Users {
+			users[i] = ConvertProtoUserToGraphQL(protoUser)
+		}
+		org.Users = users
+	} else {
+		org.Users = []*model.User{}
+	}
+
 	// Convert roles if available
-	if len(protoUser.Roles) > 0 {
-		roles := make([]*model.Role, len(protoUser.Roles))
-		for i, protoRole := range protoUser.Roles {
+	if len(protoOrg.Roles) > 0 {
+		roles := make([]*model.Role, len(protoOrg.Roles))
+		for i, protoRole := range protoOrg.Roles {
 			role := &model.Role{
 				ID:        protoRole.Id,
 				Name:      protoRole.Name,
@@ -99,14 +138,13 @@ func ConvertProtoUserToGraphQL(protoUser *authpb.User) *model.User {
 
 			roles[i] = role
 		}
-		user.Roles = roles
+		org.Roles = roles
 	} else {
-		user.Roles = []*model.Role{}
+		org.Roles = []*model.Role{}
 	}
 
-	// For now, permissions are handled through roles
-	// If we need direct user permissions, we can add them here
-	user.Permissions = []*model.Permission{}
+	// Initialize permissions as empty for now
+	org.Permissions = []*model.Permission{}
 
-	return user
+	return org
 }

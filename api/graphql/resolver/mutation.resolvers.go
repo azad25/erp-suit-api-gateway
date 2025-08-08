@@ -9,7 +9,7 @@ import (
 	"erp-api-gateway/api/graphql/generated"
 	"erp-api-gateway/api/graphql/model"
 	"erp-api-gateway/internal/interfaces"
-	authpb "erp-api-gateway/proto/gen/auth"
+	authpb "erp-api-gateway/proto"
 	"fmt"
 	"time"
 )
@@ -227,7 +227,7 @@ func (r *mutationResolver) CreateUserAdmin(ctx context.Context, input model.Crea
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "User not authenticated",
-			Errors: []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
+			Errors:  []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
 		}, nil
 	}
 
@@ -237,7 +237,7 @@ func (r *mutationResolver) CreateUserAdmin(ctx context.Context, input model.Crea
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Organization context not found",
-			Errors: []*model.FieldError{{Field: "organization", Message: "Organization context required"}},
+			Errors:  []*model.FieldError{{Field: "organization", Message: "Organization context required"}},
 		}, nil
 	}
 
@@ -250,7 +250,7 @@ func (r *mutationResolver) CreateUserAdmin(ctx context.Context, input model.Crea
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Authentication service unavailable",
-			Errors: []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
+			Errors:  []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
 		}, nil
 	}
 
@@ -273,7 +273,7 @@ func (r *mutationResolver) CreateUserAdmin(ctx context.Context, input model.Crea
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Failed to create user",
-			Errors: []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
+			Errors:  []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
 		}, nil
 	}
 
@@ -281,7 +281,7 @@ func (r *mutationResolver) CreateUserAdmin(ctx context.Context, input model.Crea
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Failed to create user",
-			Errors: []*model.FieldError{{Field: "general", Message: resp.Error}},
+			Errors:  []*model.FieldError{{Field: "general", Message: resp.Error}},
 		}, nil
 	}
 
@@ -300,7 +300,7 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, id string, input mode
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "User not authenticated",
-			Errors: []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
+			Errors:  []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
 		}, nil
 	}
 
@@ -313,15 +313,30 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, id string, input mode
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Authentication service unavailable",
-			Errors: []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
+			Errors:  []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
 		}, nil
 	}
 
 	resp, err := authClient.UpdateUser(ctx, &authpb.UpdateUserRequest{
-		UserId:     id,
-		Email:      func() string { if input.Email != nil { return *input.Email }; return "" }(),
-		FirstName:  func() string { if input.FirstName != nil { return *input.FirstName }; return "" }(),
-		LastName:   func() string { if input.LastName != nil { return *input.LastName }; return "" }(),
+		UserId: id,
+		Email: func() string {
+			if input.Email != nil {
+				return *input.Email
+			}
+			return ""
+		}(),
+		FirstName: func() string {
+			if input.FirstName != nil {
+				return *input.FirstName
+			}
+			return ""
+		}(),
+		LastName: func() string {
+			if input.LastName != nil {
+				return *input.LastName
+			}
+			return ""
+		}(),
 		IsActive:   input.IsActive != nil && *input.IsActive,
 		IsVerified: input.IsVerified != nil && *input.IsVerified,
 		RoleIds:    input.RoleIds,
@@ -335,7 +350,7 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, id string, input mode
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Failed to update user",
-			Errors: []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
+			Errors:  []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
 		}, nil
 	}
 
@@ -343,7 +358,7 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, id string, input mode
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Failed to update user",
-			Errors: []*model.FieldError{{Field: "general", Message: resp.Error}},
+			Errors:  []*model.FieldError{{Field: "general", Message: resp.Error}},
 		}, nil
 	}
 
@@ -362,7 +377,7 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (*model.Mu
 		return &model.MutationResponse{
 			Success: false,
 			Message: "User not authenticated",
-			Errors: []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
+			Errors:  []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
 		}, nil
 	}
 
@@ -375,7 +390,7 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (*model.Mu
 		return &model.MutationResponse{
 			Success: false,
 			Message: "Authentication service unavailable",
-			Errors: []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
+			Errors:  []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
 		}, nil
 	}
 
@@ -391,7 +406,7 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (*model.Mu
 		return &model.MutationResponse{
 			Success: false,
 			Message: "Failed to delete user",
-			Errors: []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
+			Errors:  []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
 		}, nil
 	}
 
@@ -399,7 +414,7 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (*model.Mu
 		return &model.MutationResponse{
 			Success: false,
 			Message: "Failed to delete user",
-			Errors: []*model.FieldError{{Field: "general", Message: resp.Error}},
+			Errors:  []*model.FieldError{{Field: "general", Message: resp.Error}},
 		}, nil
 	}
 
@@ -417,7 +432,7 @@ func (r *mutationResolver) ActivateUser(ctx context.Context, id string) (*model.
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "User not authenticated",
-			Errors: []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
+			Errors:  []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
 		}, nil
 	}
 
@@ -430,7 +445,7 @@ func (r *mutationResolver) ActivateUser(ctx context.Context, id string) (*model.
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Authentication service unavailable",
-			Errors: []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
+			Errors:  []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
 		}, nil
 	}
 
@@ -446,7 +461,7 @@ func (r *mutationResolver) ActivateUser(ctx context.Context, id string) (*model.
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Failed to activate user",
-			Errors: []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
+			Errors:  []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
 		}, nil
 	}
 
@@ -454,7 +469,7 @@ func (r *mutationResolver) ActivateUser(ctx context.Context, id string) (*model.
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Failed to activate user",
-			Errors: []*model.FieldError{{Field: "general", Message: resp.Error}},
+			Errors:  []*model.FieldError{{Field: "general", Message: resp.Error}},
 		}, nil
 	}
 
@@ -473,7 +488,7 @@ func (r *mutationResolver) DeactivateUser(ctx context.Context, id string) (*mode
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "User not authenticated",
-			Errors: []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
+			Errors:  []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
 		}, nil
 	}
 
@@ -486,7 +501,7 @@ func (r *mutationResolver) DeactivateUser(ctx context.Context, id string) (*mode
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Authentication service unavailable",
-			Errors: []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
+			Errors:  []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
 		}, nil
 	}
 
@@ -502,7 +517,7 @@ func (r *mutationResolver) DeactivateUser(ctx context.Context, id string) (*mode
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Failed to deactivate user",
-			Errors: []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
+			Errors:  []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
 		}, nil
 	}
 
@@ -510,7 +525,7 @@ func (r *mutationResolver) DeactivateUser(ctx context.Context, id string) (*mode
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Failed to deactivate user",
-			Errors: []*model.FieldError{{Field: "general", Message: resp.Error}},
+			Errors:  []*model.FieldError{{Field: "general", Message: resp.Error}},
 		}, nil
 	}
 
@@ -529,7 +544,7 @@ func (r *mutationResolver) VerifyUser(ctx context.Context, id string) (*model.Us
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "User not authenticated",
-			Errors: []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
+			Errors:  []*model.FieldError{{Field: "auth", Message: "Authentication required"}},
 		}, nil
 	}
 
@@ -542,7 +557,7 @@ func (r *mutationResolver) VerifyUser(ctx context.Context, id string) (*model.Us
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Authentication service unavailable",
-			Errors: []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
+			Errors:  []*model.FieldError{{Field: "service", Message: "Service unavailable"}},
 		}, nil
 	}
 
@@ -558,7 +573,7 @@ func (r *mutationResolver) VerifyUser(ctx context.Context, id string) (*model.Us
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Failed to verify user",
-			Errors: []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
+			Errors:  []*model.FieldError{{Field: "general", Message: "Service error occurred"}},
 		}, nil
 	}
 
@@ -566,7 +581,7 @@ func (r *mutationResolver) VerifyUser(ctx context.Context, id string) (*model.Us
 		return &model.UserMutationResponse{
 			Success: false,
 			Message: "Failed to verify user",
-			Errors: []*model.FieldError{{Field: "general", Message: resp.Error}},
+			Errors:  []*model.FieldError{{Field: "general", Message: resp.Error}},
 		}, nil
 	}
 
@@ -599,7 +614,29 @@ func (r *mutationResolver) DeleteRole(ctx context.Context, id string) (*model.Mu
 
 // AssignUserRole is the resolver for the assignUserRole field.
 func (r *mutationResolver) AssignUserRole(ctx context.Context, userID string, roleID string) (*model.MutationResponse, error) {
-	panic(fmt.Errorf("not implemented: AssignUserRole - assignUserRole"))
+	// Require authentication
+	if _, exists := ctx.Value("user_id").(string); !exists {
+		return &model.MutationResponse{Success: false, Message: "User not authenticated"}, nil
+	}
+
+	// Call auth service via gRPC
+	authClient, err := r.GRPCClient.AuthService(ctx)
+	if err != nil {
+		r.Logger.Error("AssignUserRole: failed to get auth client", map[string]interface{}{"error": err})
+		return &model.MutationResponse{Success: false, Message: "Service unavailable"}, nil
+	}
+
+	resp, err := authClient.AssignUserRole(ctx, &authpb.AssignUserRoleRequest{UserId: userID, RoleId: roleID})
+	if err != nil {
+		r.Logger.Error("AssignUserRole: gRPC call failed", map[string]interface{}{"error": err})
+		return &model.MutationResponse{Success: false, Message: "Failed to assign role"}, nil
+	}
+
+	if !resp.Success {
+		return &model.MutationResponse{Success: false, Message: resp.Error}, nil
+	}
+
+	return &model.MutationResponse{Success: true, Message: "Role assigned"}, nil
 }
 
 // RevokeUserRole is the resolver for the revokeUserRole field.
@@ -625,6 +662,31 @@ func (r *mutationResolver) BulkUpdateUsers(ctx context.Context, input model.Bulk
 // BulkDeleteUsers is the resolver for the bulkDeleteUsers field.
 func (r *mutationResolver) BulkDeleteUsers(ctx context.Context, userIds []string) (*model.BulkDeleteMutationResponse, error) {
 	panic(fmt.Errorf("not implemented: BulkDeleteUsers - bulkDeleteUsers"))
+}
+
+// CreateOrganization is the resolver for the createOrganization field.
+func (r *mutationResolver) CreateOrganization(ctx context.Context, input model.CreateOrganizationInput) (*model.OrganizationMutationResponse, error) {
+	panic(fmt.Errorf("not implemented: CreateOrganization - createOrganization"))
+}
+
+// UpdateOrganization is the resolver for the updateOrganization field.
+func (r *mutationResolver) UpdateOrganization(ctx context.Context, id string, input model.UpdateOrganizationInput) (*model.OrganizationMutationResponse, error) {
+	panic(fmt.Errorf("not implemented: UpdateOrganization - updateOrganization"))
+}
+
+// DeleteOrganization is the resolver for the deleteOrganization field.
+func (r *mutationResolver) DeleteOrganization(ctx context.Context, id string) (*model.MutationResponse, error) {
+	panic(fmt.Errorf("not implemented: DeleteOrganization - deleteOrganization"))
+}
+
+// ActivateOrganization is the resolver for the activateOrganization field.
+func (r *mutationResolver) ActivateOrganization(ctx context.Context, id string) (*model.OrganizationMutationResponse, error) {
+	panic(fmt.Errorf("not implemented: ActivateOrganization - activateOrganization"))
+}
+
+// DeactivateOrganization is the resolver for the deactivateOrganization field.
+func (r *mutationResolver) DeactivateOrganization(ctx context.Context, id string) (*model.OrganizationMutationResponse, error) {
+	panic(fmt.Errorf("not implemented: DeactivateOrganization - deactivateOrganization"))
 }
 
 // Mutation returns generated.MutationResolver implementation.

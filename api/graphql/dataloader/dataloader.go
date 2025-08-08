@@ -9,7 +9,7 @@ import (
 	"erp-api-gateway/api/graphql/helpers"
 	"erp-api-gateway/api/graphql/model"
 	"erp-api-gateway/internal/services/grpc_client"
-	authpb "erp-api-gateway/proto/gen/auth"
+	authpb "erp-api-gateway/proto"
 )
 
 // DataLoader implements the DataLoader pattern to prevent N+1 query problems

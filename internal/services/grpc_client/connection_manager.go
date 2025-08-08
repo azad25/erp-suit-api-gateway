@@ -40,12 +40,12 @@ func DefaultConnectionConfig() *ConnectionConfig {
 	return &ConnectionConfig{
 		MaxIdleTime:         30 * time.Minute,
 		MaxConnectionAge:    2 * time.Hour,
-		KeepAliveTime:       30 * time.Second,
-		KeepAliveTimeout:    5 * time.Second,
+		KeepAliveTime:       60 * time.Second,    // Increased from 30s to 60s
+		KeepAliveTimeout:    20 * time.Second,    // Increased from 5s to 20s
 		MaxConnections:      10,
 		ConnectTimeout:      10 * time.Second,
 		EnableHealthCheck:   true,
-		HealthCheckInterval: 30 * time.Second,
+		HealthCheckInterval: 60 * time.Second,    // Increased from 30s to 60s
 	}
 }
 
@@ -109,7 +109,7 @@ func (cm *ConnectionManager) createConnection(ctx context.Context, address strin
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                cm.config.KeepAliveTime,
 			Timeout:             cm.config.KeepAliveTimeout,
-			PermitWithoutStream: true,
+			PermitWithoutStream: false,  // Changed to false to reduce pings
 		}),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(4*1024*1024), // 4MB

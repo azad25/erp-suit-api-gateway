@@ -101,4 +101,29 @@ type Mutation {
   Bulk delete users (admin only)
   """
   bulkDeleteUsers(userIds: [ID!]!): BulkDeleteMutationResponse!
+
+  """
+  Create a new organization (app admin only)
+  """
+  createOrganization(input: CreateOrganizationInput!): OrganizationMutationResponse!
+
+  """
+  Update an organization (app admin or org admin)
+  """
+  updateOrganization(id: ID!, input: UpdateOrganizationInput!): OrganizationMutationResponse!
+
+  """
+  Delete an organization (app admin only)
+  """
+  deleteOrganization(id: ID!): MutationResponse!
+
+  """
+  Activate an organization (app admin only)
+  """
+  activateOrganization(id: ID!): OrganizationMutationResponse!
+
+  """
+  Deactivate an organization (app admin only)
+  """
+  deactivateOrganization(id: ID!): OrganizationMutationResponse!
 }

@@ -13,7 +13,7 @@ import (
 	"erp-api-gateway/internal/circuitbreaker"
 	"erp-api-gateway/internal/config"
 	"erp-api-gateway/internal/logging"
-	authpb "erp-api-gateway/proto/gen/auth"
+	authpb "erp-api-gateway/proto"
 	crmpb "erp-api-gateway/proto/gen/crm"
 	hrmpb "erp-api-gateway/proto/gen/hrm"
 	financepb "erp-api-gateway/proto/gen/finance"

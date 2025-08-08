@@ -53,7 +53,85 @@ type Query {
   permissions: [Permission!]!
 
   """
+  Get organization statistics (requires admin permission)
+  """
+  organizationStats: OrganizationStats!
+
+  """
+  Get organization by ID (requires admin or org admin permission)
+  """
+  organization(id: ID!): Organization
+
+  """
+  Get all organizations with pagination (requires app admin permission)
+  """
+  organizations(
+    limit: Int = 10
+    offset: Int = 0
+    search: String
+    sortBy: String = "created_at"
+    sortOrder: String = "desc"
+  ): OrganizationConnection!
+
+  """
+  Get users by organization (requires org admin permission)
+  """
+  organizationUsers(
+    organizationId: ID!
+    limit: Int = 10
+    offset: Int = 0
+    search: String
+    sortBy: String = "created_at"
+    sortOrder: String = "desc"
+  ): UserConnection!
+
+  """
+  Get roles by organization (requires org admin permission)
+  """
+  organizationRoles(organizationId: ID!): [Role!]!
+
+  """
+  Get permissions by organization (requires org admin permission)
+  """
+  organizationPermissions(organizationId: ID!): [Permission!]!
+
+  """
   Health check endpoint
   """
   health: String!
+
+  """
+  Get current user's role type (app_admin, organization_admin, user)
+  """
+  userRoleType: String!
+
+  """
+  Get current user's role details with boolean helpers
+  """
+  userRole: UserRoleInfo!
+}
+
+"""
+Detailed role information for the current user
+"""
+type UserRoleInfo {
+  """
+  Role type identifier: app_admin, organization_admin, or user
+  """
+  roleType: String!
+
+  """
+  True if the user is an application admin
+  """
+  isAppAdmin: Boolean!
+
+  """
+  True if the user is an organization admin
+  """
+  isOrganizationAdmin: Boolean!
+
+  """
+  True if the user is a regular user
+  """
+  isRegularUser: Boolean!
 }

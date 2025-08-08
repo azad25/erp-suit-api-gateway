@@ -28,6 +28,11 @@ type Organization {
   isActive: Boolean!
   createdAt: String!
   updatedAt: String!
+  users: [User!]!
+  userCount: Int!
+  activeUserCount: Int!
+  roles: [Role!]!
+  permissions: [Permission!]!
 }
 
 """
@@ -109,6 +114,36 @@ type SecurityStats {
   securityAlerts: Int!
   twoFactorEnabled: Int!
   passwordResetsToday: Int!
+}
+
+"""
+Organization statistics
+"""
+type OrganizationStats {
+  totalOrganizations: Int!
+  activeOrganizations: Int!
+  inactiveOrganizations: Int!
+  verifiedOrganizations: Int!
+  unverifiedOrganizations: Int!
+  totalUsers: Int!
+  averageUsersPerOrg: Float!
+}
+
+"""
+Organization connection for pagination
+"""
+type OrganizationConnection {
+  edges: [OrganizationEdge!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+"""
+Organization edge for pagination
+"""
+type OrganizationEdge {
+  node: Organization!
+  cursor: String!
 }
 
 """
@@ -220,6 +255,27 @@ input BulkUpdateUsersInput {
 }
 
 """
+Input for creating an organization
+"""
+input CreateOrganizationInput {
+  name: String!
+  domain: String!
+  adminEmail: String!
+  adminPassword: String!
+  adminFirstName: String!
+  adminLastName: String!
+}
+
+"""
+Input for updating an organization
+"""
+input UpdateOrganizationInput {
+  name: String
+  domain: String
+  isActive: Boolean
+}
+
+"""
 Input for user update in bulk operations
 """
 input UserUpdateInput {
@@ -308,6 +364,16 @@ type BulkDeleteResult {
   success: Boolean!
   userId: String!
   error: String
+}
+
+"""
+Organization mutation response
+"""
+type OrganizationMutationResponse {
+  success: Boolean!
+  message: String!
+  organization: Organization
+  errors: [FieldError!]
 }
 
 """

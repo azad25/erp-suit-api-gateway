@@ -63,6 +63,16 @@ type BulkUserResult struct {
 	Email   *string `json:"email,omitempty"`
 }
 
+// Input for creating an organization
+type CreateOrganizationInput struct {
+	Name           string `json:"name"`
+	Domain         string `json:"domain"`
+	AdminEmail     string `json:"adminEmail"`
+	AdminPassword  string `json:"adminPassword"`
+	AdminFirstName string `json:"adminFirstName"`
+	AdminLastName  string `json:"adminLastName"`
+}
+
 // Input for creating a role
 type CreateRoleInput struct {
 	Name          string   `json:"name"`
@@ -119,12 +129,49 @@ type Notification struct {
 
 // Organization represents an organization
 type Organization struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Domain    string `json:"domain"`
-	IsActive  bool   `json:"isActive"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
+	ID              string        `json:"id"`
+	Name            string        `json:"name"`
+	Domain          string        `json:"domain"`
+	IsActive        bool          `json:"isActive"`
+	CreatedAt       string        `json:"createdAt"`
+	UpdatedAt       string        `json:"updatedAt"`
+	Users           []*User       `json:"users"`
+	UserCount       int           `json:"userCount"`
+	ActiveUserCount int           `json:"activeUserCount"`
+	Roles           []*Role       `json:"roles"`
+	Permissions     []*Permission `json:"permissions"`
+}
+
+// Organization connection for pagination
+type OrganizationConnection struct {
+	Edges      []*OrganizationEdge `json:"edges"`
+	TotalCount int                 `json:"totalCount"`
+	PageInfo   *PageInfo           `json:"pageInfo"`
+}
+
+// Organization edge for pagination
+type OrganizationEdge struct {
+	Node   *Organization `json:"node"`
+	Cursor string        `json:"cursor"`
+}
+
+// Organization mutation response
+type OrganizationMutationResponse struct {
+	Success      bool          `json:"success"`
+	Message      string        `json:"message"`
+	Organization *Organization `json:"organization,omitempty"`
+	Errors       []*FieldError `json:"errors,omitempty"`
+}
+
+// Organization statistics
+type OrganizationStats struct {
+	TotalOrganizations      int     `json:"totalOrganizations"`
+	ActiveOrganizations     int     `json:"activeOrganizations"`
+	InactiveOrganizations   int     `json:"inactiveOrganizations"`
+	VerifiedOrganizations   int     `json:"verifiedOrganizations"`
+	UnverifiedOrganizations int     `json:"unverifiedOrganizations"`
+	TotalUsers              int     `json:"totalUsers"`
+	AverageUsersPerOrg      float64 `json:"averageUsersPerOrg"`
 }
 
 // Page info for pagination
@@ -202,6 +249,13 @@ type SystemAnnouncement struct {
 	Message   string           `json:"message"`
 	Severity  Severity         `json:"severity"`
 	CreatedAt string           `json:"createdAt"`
+}
+
+// Input for updating an organization
+type UpdateOrganizationInput struct {
+	Name     *string `json:"name,omitempty"`
+	Domain   *string `json:"domain,omitempty"`
+	IsActive *bool   `json:"isActive,omitempty"`
 }
 
 // Input for updating a role
@@ -284,6 +338,18 @@ type UserMutationResponse struct {
 	Message string        `json:"message"`
 	User    *User         `json:"user,omitempty"`
 	Errors  []*FieldError `json:"errors,omitempty"`
+}
+
+// Detailed role information for the current user
+type UserRoleInfo struct {
+	// Role type identifier: app_admin, organization_admin, or user
+	RoleType string `json:"roleType"`
+	// True if the user is an application admin
+	IsAppAdmin bool `json:"isAppAdmin"`
+	// True if the user is an organization admin
+	IsOrganizationAdmin bool `json:"isOrganizationAdmin"`
+	// True if the user is a regular user
+	IsRegularUser bool `json:"isRegularUser"`
 }
 
 // User statistics

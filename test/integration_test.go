@@ -19,7 +19,7 @@ import (
 	"erp-api-gateway/api/rest"
 	"erp-api-gateway/internal/interfaces"
 	"erp-api-gateway/middleware"
-	authpb "erp-api-gateway/proto/gen/auth"
+	authpb "erp-api-gateway/proto"
 )
 
 // Mock implementations for integration tests
