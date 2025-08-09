@@ -209,6 +209,9 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to load environment variables: %w", err)
 	}
 
+	// Load gRPC service-specific environment variables
+	loadGRPCServiceEnvVars(cfg)
+
 	// Validate configuration
 	if err := validate(cfg); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -236,6 +239,9 @@ func LoadFromPath(configPath string) (*Config, error) {
 	if err := loadFromEnv(cfg); err != nil {
 		return nil, fmt.Errorf("failed to load environment variables: %w", err)
 	}
+
+	// Load gRPC service-specific environment variables
+	loadGRPCServiceEnvVars(cfg)
 
 	// Validate configuration
 	if err := validate(cfg); err != nil {
@@ -890,4 +896,65 @@ func (c *GRPCConfig) SetServiceAddress(serviceName, address string) {
 	case "finance":
 		c.FinanceServiceAddress = address
 	}
+}
+
+// loadGRPCServiceEnvVars loads gRPC service-specific environment variables
+func loadGRPCServiceEnvVars(cfg *Config) {
+	// Auth Service
+	if host := os.Getenv("GRPC_AUTH_SERVICE_HOST"); host != "" {
+		cfg.GRPC.AuthService.Host = host
+	}
+	if port := os.Getenv("GRPC_AUTH_SERVICE_PORT"); port != "" {
+		if p, err := strconv.Atoi(port); err == nil {
+			cfg.GRPC.AuthService.Port = p
+		}
+	}
+	if timeout := os.Getenv("GRPC_AUTH_SERVICE_TIMEOUT"); timeout != "" {
+		if t, err := time.ParseDuration(timeout); err == nil {
+			cfg.GRPC.AuthService.Timeout = t
+		}
+	}
+	if retries := os.Getenv("GRPC_AUTH_SERVICE_MAX_RETRIES"); retries != "" {
+		if r, err := strconv.Atoi(retries); err == nil {
+			cfg.GRPC.AuthService.MaxRetries = r
+		}
+	}
+	if backoff := os.Getenv("GRPC_AUTH_SERVICE_RETRY_BACKOFF"); backoff != "" {
+		if b, err := time.ParseDuration(backoff); err == nil {
+			cfg.GRPC.AuthService.RetryBackoff = b
+		}
+	}
+
+	// CRM Service
+	if host := os.Getenv("GRPC_CRM_SERVICE_HOST"); host != "" {
+		cfg.GRPC.CRMService.Host = host
+	}
+	if port := os.Getenv("GRPC_CRM_SERVICE_PORT"); port != "" {
+		if p, err := strconv.Atoi(port); err == nil {
+			cfg.GRPC.CRMService.Port = p
+		}
+	}
+
+	// HRM Service
+	if host := os.Getenv("GRPC_HRM_SERVICE_HOST"); host != "" {
+		cfg.GRPC.HRMService.Host = host
+	}
+	if port := os.Getenv("GRPC_HRM_SERVICE_PORT"); port != "" {
+		if p, err := strconv.Atoi(port); err == nil {
+			cfg.GRPC.HRMService.Port = p
+		}
+	}
+
+	// Finance Service
+	if host := os.Getenv("GRPC_FINANCE_SERVICE_HOST"); host != "" {
+		cfg.GRPC.FinanceService.Host = host
+	}
+	if port := os.Getenv("GRPC_FINANCE_SERVICE_PORT"); port != "" {
+		if p, err := strconv.Atoi(port); err == nil {
+			cfg.GRPC.FinanceService.Port = p
+		}
+	}
+
+	// Update service address strings after loading environment variables
+	syncServiceAddresses(cfg)
 }

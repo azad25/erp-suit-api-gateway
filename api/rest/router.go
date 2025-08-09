@@ -28,14 +28,14 @@ func SetupAuthRoutes(router *gin.Engine, config *RouterConfig) {
 	authGroup := router.Group("/auth")
 	{
 		// Public routes (no authentication required)
-		authGroup.POST("/login/", authHandler.Login)
-		authGroup.POST("/register/", authHandler.Register)
-		authGroup.POST("/refresh/", authHandler.RefreshToken)
+		authGroup.POST("/login", authHandler.Login)
+		authGroup.POST("/register", authHandler.Register)
+		authGroup.POST("/refresh", authHandler.RefreshToken)
 
 		// Protected routes (authentication required)
 		// Note: These would typically have authentication middleware applied
-		authGroup.POST("/logout/", authHandler.Logout)
-		authGroup.GET("/me/", authHandler.GetCurrentUser)
+		authGroup.POST("/logout", authHandler.Logout)
+		authGroup.GET("/me", authHandler.GetCurrentUser)
 	}
 }
 

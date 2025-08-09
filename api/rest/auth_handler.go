@@ -38,7 +38,7 @@ func NewAuthHandler(
 }
 
 // Login handles user login requests
-// POST /auth/login/
+// POST /auth/login
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

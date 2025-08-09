@@ -287,13 +287,13 @@ func (s *Server) setupRESTRoutes() {
 	authGroup := s.router.Group("/auth")
 	{
 		// Public routes
-		authGroup.POST("/login/", s.getRESTAuthHandler(routerConfig).Login)
-		authGroup.POST("/register/", s.getRESTAuthHandler(routerConfig).Register)
-		authGroup.POST("/refresh/", s.getRESTAuthHandler(routerConfig).RefreshToken)
+		authGroup.POST("/login", s.getRESTAuthHandler(routerConfig).Login)
+		authGroup.POST("/register", s.getRESTAuthHandler(routerConfig).Register)
+		authGroup.POST("/refresh", s.getRESTAuthHandler(routerConfig).RefreshToken)
 
 		// Protected routes
-		authGroup.POST("/logout/", s.requireAuth(), s.getRESTAuthHandler(routerConfig).Logout)
-		authGroup.GET("/me/", s.requireAuth(), s.getRESTAuthHandler(routerConfig).GetCurrentUser)
+		authGroup.POST("/logout", s.requireAuth(), s.getRESTAuthHandler(routerConfig).Logout)
+		authGroup.GET("/me", s.requireAuth(), s.getRESTAuthHandler(routerConfig).GetCurrentUser)
 	}
 
 	// API v1 routes
@@ -303,13 +303,13 @@ func (s *Server) setupRESTRoutes() {
 		authV1 := v1.Group("/auth")
 		{
 			// Public routes
-			authV1.POST("/login/", s.getRESTAuthHandler(routerConfig).Login)
-			authV1.POST("/register/", s.getRESTAuthHandler(routerConfig).Register)
-			authV1.POST("/refresh/", s.getRESTAuthHandler(routerConfig).RefreshToken)
+			authV1.POST("/login", s.getRESTAuthHandler(routerConfig).Login)
+			authV1.POST("/register", s.getRESTAuthHandler(routerConfig).Register)
+			authV1.POST("/refresh", s.getRESTAuthHandler(routerConfig).RefreshToken)
 
 			// Protected routes
-			authV1.POST("/logout/", s.requireAuth(), s.getRESTAuthHandler(routerConfig).Logout)
-			authV1.GET("/me/", s.requireAuth(), s.getRESTAuthHandler(routerConfig).GetCurrentUser)
+			authV1.POST("/logout", s.requireAuth(), s.getRESTAuthHandler(routerConfig).Logout)
+			authV1.GET("/me", s.requireAuth(), s.getRESTAuthHandler(routerConfig).GetCurrentUser)
 		}
 
 		// Future API routes will be added here
