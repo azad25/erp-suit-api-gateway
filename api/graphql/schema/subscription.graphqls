@@ -1,70 +1,323 @@
-"""
-Root Subscription type for real-time updates
-"""
+# Subscription Service GraphQL Schema
+
+# Plan Types
+type Plan {
+  id: ID!
+  name: String!
+  description: String
+  price: Float!
+  currency: String!
+  billingCycle: String!
+  isActive: Boolean!
+  isPopular: Boolean!
+  maxUsers: Int!
+  maxStorageGB: Int!
+  maxProjects: Int!
+  maxAPICalls: Int!
+  hasAdvancedReporting: Boolean!
+  hasAPIAccess: Boolean!
+  hasCustomIntegrations: Boolean!
+  hasPrioritySupport: Boolean!
+  hasPhoneSupport: Boolean!
+  createdAt: String!
+  updatedAt: String!
+}
+
+# Subscription Types
 type Subscription {
-  """
-  Subscribe to user-specific notifications
-  """
-  userNotifications: Notification!
-
-  """
-  Subscribe to system-wide announcements (requires admin permission)
-  """
-  systemAnnouncements: SystemAnnouncement!
-}
-
-"""
-User notification
-"""
-type Notification {
   id: ID!
-  userId: ID!
-  type: NotificationType!
-  title: String!
-  message: String!
-  data: String
-  read: Boolean!
+  organizationId: ID!
+  planId: ID!
+  status: String!
+  currentPeriodStart: String!
+  currentPeriodEnd: String!
+  cancelAtPeriodEnd: Boolean!
+  canceledAt: String
+  endedAt: String
+  trialStart: String
+  trialEnd: String
+  billingCycle: String!
+  amount: Float!
+  currency: String!
+  maxUsers: Int!
+  currentUsers: Int!
+  maxStorageGB: Int!
+  currentStorageGB: Float!
   createdAt: String!
+  updatedAt: String!
+  plan: Plan
+  invoices: [Invoice!]
 }
 
-"""
-System announcement
-"""
-type SystemAnnouncement {
+# Invoice Types
+type Invoice {
   id: ID!
-  type: AnnouncementType!
-  title: String!
-  message: String!
-  severity: Severity!
+  organizationId: ID!
+  subscriptionId: ID!
+  invoiceNumber: String!
+  status: String!
+  amount: Float!
+  currency: String!
+  taxAmount: Float!
+  discountAmount: Float!
+  totalAmount: Float!
+  periodStart: String!
+  periodEnd: String!
+  dueDate: String!
+  paidAt: String
+  paymentMethodId: ID
+  paymentIntentId: String
   createdAt: String!
+  updatedAt: String!
+  subscription: Subscription
 }
 
-"""
-Notification types
-"""
-enum NotificationType {
-  INFO
-  WARNING
-  ERROR
-  SUCCESS
+# Payment Method Types
+type PaymentMethod {
+  id: ID!
+  organizationId: ID!
+  type: String!
+  brand: String
+  last4: String
+  expiryMonth: Int
+  expiryYear: Int
+  email: String
+  isDefault: Boolean!
+  isActive: Boolean!
+  providerId: String
+  createdAt: String!
+  updatedAt: String!
 }
 
-"""
-Announcement types
-"""
-enum AnnouncementType {
-  MAINTENANCE
-  UPDATE
-  SECURITY
-  GENERAL
+# Usage Types
+type Usage {
+  id: ID!
+  organizationId: ID!
+  subscriptionId: ID!
+  metric: String!
+  value: Float!
+  limit: Float!
+  period: String!
+  date: String!
+  createdAt: String!
+  updatedAt: String!
 }
 
-"""
-Severity levels
-"""
-enum Severity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
+# Billing Info Types
+type BillingInfo {
+  organizationId: ID!
+  companyName: String
+  addressLine1: String
+  addressLine2: String
+  city: String
+  state: String
+  postalCode: String
+  country: String
+  taxId: String
+  email: String
+  phone: String
+  createdAt: String!
+  updatedAt: String!
+}
+
+# Plan Input
+input CreatePlanInput {
+  name: String!
+  description: String
+  price: Float!
+  currency: String!
+  billingCycle: String!
+  maxUsers: Int!
+  maxStorageGB: Int!
+  maxProjects: Int!
+  maxAPICalls: Int!
+  hasAdvancedReporting: Boolean!
+  hasAPIAccess: Boolean!
+  hasCustomIntegrations: Boolean!
+  hasPrioritySupport: Boolean!
+  hasPhoneSupport: Boolean!
+  isPopular: Boolean!
+}
+
+input UpdatePlanInput {
+  name: String
+  description: String
+  price: Float
+  currency: String
+  billingCycle: String
+  maxUsers: Int
+  maxStorageGB: Int
+  maxProjects: Int
+  maxAPICalls: Int
+  hasAdvancedReporting: Boolean
+  hasAPIAccess: Boolean
+  hasCustomIntegrations: Boolean
+  hasPrioritySupport: Boolean
+  hasPhoneSupport: Boolean
+  isPopular: Boolean
+  isActive: Boolean
+}
+
+# Subscription Input
+input CreateSubscriptionInput {
+  organizationId: ID!
+  planId: ID!
+  billingCycle: String!
+  paymentMethodId: ID
+  startTrial: Boolean
+  trialDays: Int
+}
+
+input UpdateSubscriptionInput {
+  billingCycle: String
+  cancelAtPeriodEnd: Boolean
+}
+
+input ChangePlanInput {
+  subscriptionId: ID!
+  newPlanId: ID!
+  prorate: Boolean!
+}
+
+# Invoice Input
+input CreateInvoiceInput {
+  organizationId: ID!
+  subscriptionId: ID!
+  amount: Float!
+  currency: String!
+  periodStart: String!
+  periodEnd: String!
+  dueDate: String!
+}
+
+input PayInvoiceInput {
+  invoiceId: ID!
+  paymentMethodId: ID!
+}
+
+# Payment Method Input
+input CreatePaymentMethodInput {
+  organizationId: ID!
+  type: String!
+  brand: String
+  last4: String
+  expiryMonth: Int
+  expiryYear: Int
+  email: String
+  isDefault: Boolean!
+}
+
+input UpdatePaymentMethodInput {
+  isDefault: Boolean
+  isActive: Boolean
+}
+
+# Usage Input
+input TrackUsageInput {
+  organizationId: ID!
+  subscriptionId: ID!
+  metric: String!
+  value: Float!
+  limit: Float!
+  period: String!
+  date: String!
+}
+
+# Billing Info Input
+input UpdateBillingInfoInput {
+  organizationId: ID!
+  companyName: String
+  addressLine1: String
+  addressLine2: String
+  city: String
+  state: String
+  postalCode: String
+  country: String
+  taxId: String
+  email: String
+  phone: String
+}
+
+# Response Types
+type PlanResponse {
+  success: Boolean!
+  plan: Plan
+  error: String
+}
+
+type PlansResponse {
+  success: Boolean!
+  plans: [Plan!]!
+  error: String
+}
+
+type SubscriptionResponse {
+  success: Boolean!
+  subscription: Subscription
+  error: String
+}
+
+type SubscriptionCreateResponse {
+  success: Boolean!
+  subscription: Subscription
+  invoice: Invoice
+  error: String
+}
+
+type SubscriptionChangeResponse {
+  success: Boolean!
+  subscription: Subscription
+  prorationInvoice: Invoice
+  error: String
+}
+
+type InvoicesResponse {
+  success: Boolean!
+  invoices: [Invoice!]!
+  totalCount: Int!
+  hasNextPage: Boolean!
+  error: String
+}
+
+type InvoiceResponse {
+  success: Boolean!
+  invoice: Invoice
+  error: String
+}
+
+type PaymentMethodsResponse {
+  success: Boolean!
+  paymentMethods: [PaymentMethod!]!
+  error: String
+}
+
+type PaymentMethodResponse {
+  success: Boolean!
+  paymentMethod: PaymentMethod
+  error: String
+}
+
+type UsageResponse {
+  success: Boolean!
+  usage: Usage
+  error: String
+}
+
+type UsageHistoryResponse {
+  success: Boolean!
+  usageHistory: [Usage!]!
+  totalCount: Int!
+  error: String
+}
+
+type BillingInfoResponse {
+  success: Boolean!
+  billingInfo: BillingInfo
+  error: String
+}
+
+type HealthResponse {
+  status: String!
+  service: String!
+  timestamp: String!
 }

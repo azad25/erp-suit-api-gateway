@@ -69,6 +69,26 @@ grpc:
       max_failures: 5
       timeout: "60s"
       interval: "10s"
+  subscription_service:
+    host: "subscription-service"
+    port: 50051
+    timeout: "10s"
+    max_retries: 3
+    retry_backoff: "100ms"
+    circuit_breaker:
+      max_failures: 5
+      timeout: "60s"
+      interval: "10s"
+  sales_service:
+    host: "sales-service"
+    port: 50051
+    timeout: "10s"
+    max_retries: 3
+    retry_backoff: "100ms"
+    circuit_breaker:
+      max_failures: 5
+      timeout: "60s"
+      interval: "10s"
 
 # GraphQL Configuration (Local Handler)
 graphql:
@@ -99,7 +119,7 @@ websocket:
 # Health Check Optimization
 health:
   cache_timeout: "30s"        # Cache health status for 30 seconds
-  check_interval: "60s"       # Background checks every 60 seconds
+  check_interval: "10m"       # Background checks every 10 minutes (was 60s)
   max_concurrent_checks: 3    # Max 3 concurrent health checks
   http_timeout: "5s"          # HTTP health check timeout
 

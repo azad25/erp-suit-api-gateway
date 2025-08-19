@@ -1,0 +1,601 @@
+syntax = "proto3";
+
+package sales;
+
+option go_package = "erp-api-gateway/proto/gen/sales";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// Common message types
+message Organization {
+  string id = 1;
+  string name = 2;
+  string domain = 3;
+  bool is_active = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+message User {
+  string id = 1;
+  string email = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string organization_id = 5;
+  repeated string roles = 6;
+  bool is_active = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+// Lead related messages
+message Lead {
+  string id = 1;
+  string organization_id = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string email = 5;
+  string phone = 6;
+  string company = 7;
+  string position = 8;
+  string source = 9;
+  string status = 10;
+  double estimated_value = 11;
+  string description = 12;
+  string assigned_to = 13;
+  google.protobuf.Timestamp created_at = 14;
+  google.protobuf.Timestamp updated_at = 15;
+  bool is_active = 16;
+}
+
+message CreateLeadRequest {
+  string organization_id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string email = 4;
+  string phone = 5;
+  string company = 6;
+  string position = 7;
+  string source = 8;
+  double estimated_value = 9;
+  string description = 10;
+  string assigned_to = 11;
+}
+
+message UpdateLeadRequest {
+  string id = 1;
+  string organization_id = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string email = 5;
+  string phone = 6;
+  string company = 7;
+  string position = 8;
+  string source = 9;
+  string status = 10;
+  double estimated_value = 11;
+  string description = 12;
+  string assigned_to = 13;
+}
+
+message GetLeadRequest {
+  string id = 1;
+  string organization_id = 2;
+}
+
+message ListLeadsRequest {
+  string organization_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  string search = 4;
+  string status = 5;
+  string assigned_to = 6;
+}
+
+message ListLeadsResponse {
+  repeated Lead leads = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message DeleteLeadRequest {
+  string id = 1;
+  string organization_id = 2;
+}
+
+// Opportunity related messages
+message Opportunity {
+  string id = 1;
+  string organization_id = 2;
+  string lead_id = 3;
+  string name = 4;
+  string description = 5;
+  double amount = 6;
+  string stage = 7;
+  double probability = 8;
+  google.protobuf.Timestamp expected_close_date = 9;
+  string assigned_to = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  bool is_active = 13;
+}
+
+message CreateOpportunityRequest {
+  string organization_id = 1;
+  string lead_id = 2;
+  string name = 3;
+  string description = 4;
+  double amount = 5;
+  string stage = 6;
+  double probability = 7;
+  google.protobuf.Timestamp expected_close_date = 8;
+  string assigned_to = 9;
+}
+
+message UpdateOpportunityRequest {
+  string id = 1;
+  string organization_id = 2;
+  string name = 3;
+  string description = 4;
+  double amount = 5;
+  string stage = 6;
+  double probability = 7;
+  google.protobuf.Timestamp expected_close_date = 8;
+  string assigned_to = 9;
+}
+
+message GetOpportunityRequest {
+  string id = 1;
+  string organization_id = 2;
+}
+
+message ListOpportunitiesRequest {
+  string organization_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  string search = 4;
+  string stage = 5;
+  string assigned_to = 6;
+}
+
+message ListOpportunitiesResponse {
+  repeated Opportunity opportunities = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message DeleteOpportunityRequest {
+  string id = 1;
+  string organization_id = 2;
+}
+
+// Quotation related messages
+message QuotationItem {
+  string id = 1;
+  string product_id = 2;
+  string product_name = 3;
+  string description = 4;
+  int32 quantity = 5;
+  double unit_price = 6;
+  double discount_percent = 7;
+  double total = 8;
+}
+
+message Quotation {
+  string id = 1;
+  string organization_id = 2;
+  string opportunity_id = 3;
+  string customer_id = 4;
+  string quotation_number = 5;
+  string subject = 6;
+  string description = 7;
+  repeated QuotationItem items = 8;
+  double subtotal = 9;
+  double tax_amount = 10;
+  double discount_amount = 11;
+  double total_amount = 12;
+  string status = 13;
+  google.protobuf.Timestamp valid_until = 14;
+  string terms_conditions = 15;
+  string assigned_to = 16;
+  google.protobuf.Timestamp created_at = 17;
+  google.protobuf.Timestamp updated_at = 18;
+  bool is_active = 19;
+}
+
+message CreateQuotationRequest {
+  string organization_id = 1;
+  string opportunity_id = 2;
+  string customer_id = 3;
+  string subject = 4;
+  string description = 5;
+  repeated QuotationItem items = 6;
+  double tax_amount = 7;
+  double discount_amount = 8;
+  google.protobuf.Timestamp valid_until = 9;
+  string terms_conditions = 10;
+  string assigned_to = 11;
+}
+
+message UpdateQuotationRequest {
+  string id = 1;
+  string organization_id = 2;
+  string subject = 3;
+  string description = 4;
+  repeated QuotationItem items = 5;
+  double tax_amount = 6;
+  double discount_amount = 7;
+  string status = 8;
+  google.protobuf.Timestamp valid_until = 9;
+  string terms_conditions = 10;
+  string assigned_to = 11;
+}
+
+message GetQuotationRequest {
+  string id = 1;
+  string organization_id = 2;
+}
+
+message ListQuotationsRequest {
+  string organization_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  string search = 4;
+  string status = 5;
+  string assigned_to = 6;
+}
+
+message ListQuotationsResponse {
+  repeated Quotation quotations = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message DeleteQuotationRequest {
+  string id = 1;
+  string organization_id = 2;
+}
+
+// Invoice related messages
+message InvoiceItem {
+  string id = 1;
+  string product_id = 2;
+  string product_name = 3;
+  string description = 4;
+  int32 quantity = 5;
+  double unit_price = 6;
+  double discount_percent = 7;
+  double total = 8;
+}
+
+message Invoice {
+  string id = 1;
+  string organization_id = 2;
+  string quotation_id = 3;
+  string customer_id = 4;
+  string invoice_number = 5;
+  string subject = 6;
+  string description = 7;
+  repeated InvoiceItem items = 8;
+  double subtotal = 9;
+  double tax_amount = 10;
+  double discount_amount = 11;
+  double total_amount = 12;
+  string status = 13;
+  google.protobuf.Timestamp due_date = 14;
+  google.protobuf.Timestamp paid_date = 15;
+  string terms_conditions = 16;
+  string assigned_to = 17;
+  google.protobuf.Timestamp created_at = 18;
+  google.protobuf.Timestamp updated_at = 19;
+  bool is_active = 20;
+}
+
+message CreateInvoiceRequest {
+  string organization_id = 1;
+  string quotation_id = 2;
+  string customer_id = 3;
+  string subject = 4;
+  string description = 5;
+  repeated InvoiceItem items = 6;
+  double tax_amount = 7;
+  double discount_amount = 8;
+  google.protobuf.Timestamp due_date = 9;
+  string terms_conditions = 10;
+  string assigned_to = 11;
+}
+
+message UpdateInvoiceRequest {
+  string id = 1;
+  string organization_id = 2;
+  string subject = 3;
+  string description = 4;
+  repeated InvoiceItem items = 5;
+  double tax_amount = 6;
+  double discount_amount = 7;
+  string status = 8;
+  google.protobuf.Timestamp due_date = 9;
+  google.protobuf.Timestamp paid_date = 10;
+  string terms_conditions = 11;
+  string assigned_to = 12;
+}
+
+message GetInvoiceRequest {
+  string id = 1;
+  string organization_id = 2;
+}
+
+message ListInvoicesRequest {
+  string organization_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  string search = 4;
+  string status = 5;
+  string assigned_to = 6;
+}
+
+message ListInvoicesResponse {
+  repeated Invoice invoices = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message DeleteInvoiceRequest {
+  string id = 1;
+  string organization_id = 2;
+}
+
+// Customer related messages
+message Customer {
+  string id = 1;
+  string organization_id = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string email = 5;
+  string phone = 6;
+  string company = 7;
+  string address = 8;
+  string city = 9;
+  string state = 10;
+  string country = 11;
+  string postal_code = 12;
+  string tax_number = 13;
+  string customer_type = 14;
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp updated_at = 16;
+  bool is_active = 17;
+}
+
+message CreateCustomerRequest {
+  string organization_id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string email = 4;
+  string phone = 5;
+  string company = 6;
+  string address = 7;
+  string city = 8;
+  string state = 9;
+  string country = 10;
+  string postal_code = 11;
+  string tax_number = 12;
+  string customer_type = 13;
+}
+
+message UpdateCustomerRequest {
+  string id = 1;
+  string organization_id = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string email = 5;
+  string phone = 6;
+  string company = 7;
+  string address = 8;
+  string city = 9;
+  string state = 10;
+  string country = 11;
+  string postal_code = 12;
+  string tax_number = 13;
+  string customer_type = 14;
+}
+
+message GetCustomerRequest {
+  string id = 1;
+  string organization_id = 2;
+}
+
+message ListCustomersRequest {
+  string organization_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  string search = 4;
+  string customer_type = 5;
+}
+
+message ListCustomersResponse {
+  repeated Customer customers = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message DeleteCustomerRequest {
+  string id = 1;
+  string organization_id = 2;
+}
+
+// Product related messages
+message Product {
+  string id = 1;
+  string organization_id = 2;
+  string name = 3;
+  string description = 4;
+  string sku = 5;
+  string category = 6;
+  double price = 7;
+  double cost = 8;
+  int32 stock_quantity = 9;
+  int32 min_stock = 10;
+  string unit = 11;
+  bool is_active = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+}
+
+message CreateProductRequest {
+  string organization_id = 1;
+  string name = 2;
+  string description = 3;
+  string sku = 4;
+  string category = 5;
+  double price = 6;
+  double cost = 7;
+  int32 stock_quantity = 8;
+  int32 min_stock = 9;
+  string unit = 10;
+}
+
+message UpdateProductRequest {
+  string id = 1;
+  string organization_id = 2;
+  string name = 3;
+  string description = 4;
+  string sku = 5;
+  string category = 6;
+  double price = 7;
+  double cost = 8;
+  int32 stock_quantity = 9;
+  int32 min_stock = 10;
+  string unit = 11;
+}
+
+message GetProductRequest {
+  string id = 1;
+  string organization_id = 2;
+}
+
+message ListProductsRequest {
+  string organization_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  string search = 4;
+  string category = 5;
+  bool in_stock_only = 6;
+}
+
+message ListProductsResponse {
+  repeated Product products = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message DeleteProductRequest {
+  string id = 1;
+  string organization_id = 2;
+}
+
+// Dashboard and reporting messages
+message SalesDashboardRequest {
+  string organization_id = 1;
+  string period = 2; // daily, weekly, monthly, yearly
+  google.protobuf.Timestamp start_date = 3;
+  google.protobuf.Timestamp end_date = 4;
+}
+
+message SalesDashboardResponse {
+  double total_revenue = 1;
+  double total_opportunities = 2;
+  int32 total_leads = 3;
+  int32 total_customers = 4;
+  double conversion_rate = 5;
+  double average_deal_size = 6;
+  repeated SalesChartData chart_data = 7;
+  repeated TopPerformer top_performers = 8;
+  repeated RecentActivity recent_activities = 9;
+}
+
+message SalesChartData {
+  string period = 1;
+  double revenue = 2;
+  int32 deals = 3;
+  int32 leads = 4;
+}
+
+message TopPerformer {
+  string user_id = 1;
+  string user_name = 2;
+  double revenue = 3;
+  int32 deals = 4;
+}
+
+message RecentActivity {
+  string id = 1;
+  string type = 2; // lead, opportunity, quotation, invoice
+  string title = 3;
+  string description = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+// Common response messages
+message Response {
+  bool success = 1;
+  string message = 2;
+  string error = 3;
+}
+
+// Sales Service
+service SalesService {
+  // Lead management
+  rpc CreateLead(CreateLeadRequest) returns (Lead);
+  rpc GetLead(GetLeadRequest) returns (Lead);
+  rpc UpdateLead(UpdateLeadRequest) returns (Lead);
+  rpc DeleteLead(DeleteLeadRequest) returns (Response);
+  rpc ListLeads(ListLeadsRequest) returns (ListLeadsResponse);
+
+  // Opportunity management
+  rpc CreateOpportunity(CreateOpportunityRequest) returns (Opportunity);
+  rpc GetOpportunity(GetOpportunityRequest) returns (Opportunity);
+  rpc UpdateOpportunity(UpdateOpportunityRequest) returns (Opportunity);
+  rpc DeleteOpportunity(DeleteOpportunityRequest) returns (Response);
+  rpc ListOpportunities(ListOpportunitiesRequest) returns (ListOpportunitiesResponse);
+
+  // Quotation management
+  rpc CreateQuotation(CreateQuotationRequest) returns (Quotation);
+  rpc GetQuotation(GetQuotationRequest) returns (Quotation);
+  rpc UpdateQuotation(UpdateQuotationRequest) returns (Quotation);
+  rpc DeleteQuotation(DeleteQuotationRequest) returns (Response);
+  rpc ListQuotations(ListQuotationsRequest) returns (ListQuotationsResponse);
+
+  // Invoice management
+  rpc CreateInvoice(CreateInvoiceRequest) returns (Invoice);
+  rpc GetInvoice(GetInvoiceRequest) returns (Invoice);
+  rpc UpdateInvoice(UpdateInvoiceRequest) returns (Invoice);
+  rpc DeleteInvoice(DeleteInvoiceRequest) returns (Response);
+  rpc ListInvoices(ListInvoicesRequest) returns (ListInvoicesResponse);
+
+  // Customer management
+  rpc CreateCustomer(CreateCustomerRequest) returns (Customer);
+  rpc GetCustomer(GetCustomerRequest) returns (Customer);
+  rpc UpdateCustomer(UpdateCustomerRequest) returns (Customer);
+  rpc DeleteCustomer(DeleteCustomerRequest) returns (Response);
+  rpc ListCustomers(ListCustomersRequest) returns (ListCustomersResponse);
+
+  // Product management
+  rpc CreateProduct(CreateProductRequest) returns (Product);
+  rpc GetProduct(GetProductRequest) returns (Product);
+  rpc UpdateProduct(UpdateProductRequest) returns (Product);
+  rpc DeleteProduct(DeleteProductRequest) returns (Response);
+  rpc ListProducts(ListProductsRequest) returns (ListProductsResponse);
+
+  // Dashboard and reporting
+  rpc GetSalesDashboard(SalesDashboardRequest) returns (SalesDashboardResponse);
+
+  // Health check
+  rpc HealthCheck(google.protobuf.Empty) returns (Response);
+} 

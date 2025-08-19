@@ -6,9 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hashicorp/consul/api"
 	"erp-api-gateway/internal/config"
 	"erp-api-gateway/internal/logging"
+
+	"github.com/hashicorp/consul/api"
 )
 
 // ServiceDiscovery defines the interface for service discovery
@@ -130,4 +131,5 @@ type ServiceEndpoints struct {
 	CRMService     string
 	HRMService     string
 	FinanceService string
+	SalesService   string
 }

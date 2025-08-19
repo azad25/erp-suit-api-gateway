@@ -45,9 +45,9 @@ func NewHealthManager(logger interfaces.SimpleLogger) *HealthManager {
 		statuses:      make(map[string]*HealthStatus),
 		checkers:      make(map[string]HealthChecker),
 		logger:        logger,
-		cacheTimeout:  30 * time.Second,  // Cache health status for 30 seconds
-		checkInterval: 60 * time.Second,  // Check every 60 seconds (reduced from 30)
-		maxConcurrent: 3,                 // Max 3 concurrent health checks
+		cacheTimeout:  2 * time.Minute,   // Cache health status for 2 minutes (was 30s)
+		checkInterval: 5 * time.Minute,   // Check every 5 minutes (was 60s) - much less frequent
+		maxConcurrent: 2,                 // Max 2 concurrent health checks (was 3)
 		stopChan:      make(chan struct{}),
 	}
 }

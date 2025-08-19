@@ -87,10 +87,12 @@ type GRPCConfig struct {
 	CRMService                ServiceConfig `yaml:"crm_service"`
 	HRMService                ServiceConfig `yaml:"hrm_service"`
 	FinanceService            ServiceConfig `yaml:"finance_service"`
+	SalesService              ServiceConfig `yaml:"sales_service"`
 	AuthServiceAddress        string        `yaml:"auth_service_address"`
 	CRMServiceAddress         string        `yaml:"crm_service_address"`
 	HRMServiceAddress         string        `yaml:"hrm_service_address"`
 	FinanceServiceAddress     string        `yaml:"finance_service_address"`
+	SalesServiceAddress       string        `yaml:"sales_service_address"`
 	ServiceKey                string        `yaml:"service_key" env:"GRPC_SERVICE_KEY"`
 	ConsulAddress             string        `yaml:"consul_address"`
 	MaxRetries                int           `yaml:"max_retries"`
@@ -299,12 +301,14 @@ func setDefaults(cfg *Config) {
 	setServiceDefaults(&cfg.GRPC.CRMService, "localhost", 50052)
 	setServiceDefaults(&cfg.GRPC.HRMService, "localhost", 50053)
 	setServiceDefaults(&cfg.GRPC.FinanceService, "localhost", 50054)
+	setServiceDefaults(&cfg.GRPC.SalesService, "localhost", 50055)
 
 	// Set service address strings for backward compatibility
 	cfg.GRPC.AuthServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.AuthService.Host, cfg.GRPC.AuthService.Port)
 	cfg.GRPC.CRMServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.CRMService.Host, cfg.GRPC.CRMService.Port)
 	cfg.GRPC.HRMServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.HRMService.Host, cfg.GRPC.HRMService.Port)
 	cfg.GRPC.FinanceServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.FinanceService.Host, cfg.GRPC.FinanceService.Port)
+	cfg.GRPC.SalesServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.SalesService.Host, cfg.GRPC.SalesService.Port)
 
 	// Set default service key for internal service authentication
 	cfg.GRPC.ServiceKey = "internal-service-key"
@@ -356,6 +360,7 @@ func syncServiceAddresses(cfg *Config) {
 	cfg.GRPC.CRMServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.CRMService.Host, cfg.GRPC.CRMService.Port)
 	cfg.GRPC.HRMServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.HRMService.Host, cfg.GRPC.HRMService.Port)
 	cfg.GRPC.FinanceServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.FinanceService.Host, cfg.GRPC.FinanceService.Port)
+	cfg.GRPC.SalesServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.SalesService.Host, cfg.GRPC.SalesService.Port)
 }
 
 // loadFromFile loads configuration from YAML or JSON file
@@ -658,6 +663,10 @@ func validateGRPC(cfg *GRPCConfig) error {
 		return err
 	}
 
+	if err := validateService("sales_service", &cfg.SalesService); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -854,6 +863,8 @@ func (cfg *Config) GetServiceAddr(serviceName string) string {
 		svc = &cfg.GRPC.HRMService
 	case "finance":
 		svc = &cfg.GRPC.FinanceService
+	case "sales":
+		svc = &cfg.GRPC.SalesService
 	default:
 		return ""
 	}
@@ -895,6 +906,8 @@ func (c *GRPCConfig) SetServiceAddress(serviceName, address string) {
 		c.HRMServiceAddress = address
 	case "finance":
 		c.FinanceServiceAddress = address
+	case "sales":
+		c.SalesServiceAddress = address
 	}
 }
 
@@ -952,6 +965,16 @@ func loadGRPCServiceEnvVars(cfg *Config) {
 	if port := os.Getenv("GRPC_FINANCE_SERVICE_PORT"); port != "" {
 		if p, err := strconv.Atoi(port); err == nil {
 			cfg.GRPC.FinanceService.Port = p
+		}
+	}
+
+	// Sales Service
+	if host := os.Getenv("GRPC_SALES_SERVICE_HOST"); host != "" {
+		cfg.GRPC.SalesService.Host = host
+	}
+	if port := os.Getenv("GRPC_SALES_SERVICE_PORT"); port != "" {
+		if p, err := strconv.Atoi(port); err == nil {
+			cfg.GRPC.SalesService.Port = p
 		}
 	}
 

@@ -126,4 +126,86 @@ type Mutation {
   Deactivate an organization (app admin only)
   """
   deactivateOrganization(id: ID!): OrganizationMutationResponse!
+
+  # Subscription Service Mutations
+
+  """
+  Create a new subscription plan (admin only)
+  """
+  createPlan(input: CreatePlanInput!): PlanResponse!
+
+  """
+  Update a subscription plan (admin only)
+  """
+  updatePlan(id: ID!, input: UpdatePlanInput!): PlanResponse!
+
+  """
+  Delete a subscription plan (admin only)
+  """
+  deletePlan(id: ID!): MutationResponse!
+
+  """
+  Create a new subscription
+  """
+  createSubscription(input: CreateSubscriptionInput!): SubscriptionCreateResponse!
+
+  """
+  Update a subscription
+  """
+  updateSubscription(id: ID!, input: UpdateSubscriptionInput!): SubscriptionResponse!
+
+  """
+  Cancel a subscription
+  """
+  cancelSubscription(id: ID!, cancelAtPeriodEnd: Boolean = true): SubscriptionResponse!
+
+  """
+  Reactivate a subscription
+  """
+  reactivateSubscription(id: ID!): SubscriptionResponse!
+
+  """
+  Change subscription plan
+  """
+  changePlan(input: ChangePlanInput!): SubscriptionChangeResponse!
+
+  """
+  Create a new invoice
+  """
+  createInvoice(input: CreateInvoiceInput!): InvoiceResponse!
+
+  """
+  Pay an invoice
+  """
+  payInvoice(input: PayInvoiceInput!): InvoiceResponse!
+
+  """
+  Create a new payment method
+  """
+  createPaymentMethod(input: CreatePaymentMethodInput!): PaymentMethodResponse!
+
+  """
+  Update a payment method
+  """
+  updatePaymentMethod(id: ID!, input: UpdatePaymentMethodInput!): PaymentMethodResponse!
+
+  """
+  Delete a payment method
+  """
+  deletePaymentMethod(id: ID!): MutationResponse!
+
+  """
+  Set default payment method
+  """
+  setDefaultPaymentMethod(id: ID!): MutationResponse!
+
+  """
+  Track usage
+  """
+  trackUsage(input: TrackUsageInput!): UsageResponse!
+
+  """
+  Update billing info
+  """
+  updateBillingInfo(input: UpdateBillingInfoInput!): BillingInfoResponse!
 }

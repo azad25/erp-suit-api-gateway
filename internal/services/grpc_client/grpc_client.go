@@ -15,8 +15,9 @@ import (
 	"erp-api-gateway/internal/logging"
 	authpb "erp-api-gateway/proto"
 	crmpb "erp-api-gateway/proto/gen/crm"
-	hrmpb "erp-api-gateway/proto/gen/hrm"
 	financepb "erp-api-gateway/proto/gen/finance"
+	hrmpb "erp-api-gateway/proto/gen/hrm"
+	// salespb "erp-api-gateway/proto/gen/sales" // Temporarily disabled due to missing generated files
 )
 
 // GRPCClient manages connections and communication with backend gRPC services
@@ -50,6 +51,7 @@ func NewGRPCClient(cfg *config.GRPCConfig, logger logging.Logger) (*GRPCClient, 
 				CRMService:     cfg.CRMServiceAddress,
 				HRMService:     cfg.HRMServiceAddress,
 				FinanceService: cfg.FinanceServiceAddress,
+				SalesService:   cfg.SalesServiceAddress,
 			},
 		}
 	}
@@ -123,6 +125,8 @@ func (s *StaticServiceDiscovery) GetServiceAddress(serviceName string) (string, 
 		return s.Endpoints.HRMService, nil
 	case "finance":
 		return s.Endpoints.FinanceService, nil
+	case "sales":
+		return s.Endpoints.SalesService, nil
 	default:
 		return "", fmt.Errorf("unknown service: %s", serviceName)
 	}
@@ -139,13 +143,14 @@ func (s *StaticServiceDiscovery) Close() error {
 // watchServices starts watching all services for address updates
 func (c *GRPCClient) watchServices() {
 	services := []struct {
-		name    string
+		name        string
 		defaultAddr string
 	}{
 		{"auth", c.config.AuthServiceAddress},
 		{"crm", c.config.CRMServiceAddress},
 		{"hrm", c.config.HRMServiceAddress},
 		{"finance", c.config.FinanceServiceAddress},
+		{"sales", c.config.SalesServiceAddress},
 	}
 
 	for _, svc := range services {
@@ -164,8 +169,6 @@ func (c *GRPCClient) watchServices() {
 		}(svc.name)
 	}
 }
-
-
 
 // AuthService returns an Auth service client
 func (c *GRPCClient) AuthService(ctx context.Context) (authpb.AuthServiceClient, error) {
@@ -202,34 +205,47 @@ func (c *GRPCClient) FinanceService(ctx context.Context) (financepb.FinanceServi
 	}
 	return financepb.NewFinanceServiceClient(conn), nil
 }
+
+// SalesService returns a Sales service client
+// Temporarily disabled due to missing generated proto files
+/*
+func (c *GRPCClient) SalesService(ctx context.Context) (salespb.SalesServiceClient, error) {
+	conn, err := c.getServiceConnection(ctx, "sales", c.config.SalesServiceAddress)
+	if err != nil {
+		return nil, err
+	}
+	return salespb.NewSalesServiceClient(conn), nil
+}
+*/
+
 // getServiceConnection gets a connection for a service with circuit breaker protection
 func (c *GRPCClient) getServiceConnection(ctx context.Context, serviceName, address string) (*grpc.ClientConn, error) {
 	start := time.Now()
-	
+
 	// Get circuit breaker for this service
 	cb := c.getCircuitBreaker(serviceName)
-	
+
 	var conn *grpc.ClientConn
 	var err error
-	
+
 	// Execute with circuit breaker protection
 	cbErr := cb.Execute(func() error {
 		conn, err = c.connManager.GetConnection(ctx, address)
 		return err
 	})
-	
+
 	duration := time.Since(start)
-	
+
 	if cbErr != nil {
 		c.metrics.RecordConnectionError(serviceName, cbErr.Error())
 		return nil, cbErr
 	}
-	
+
 	if err != nil {
 		c.metrics.RecordConnectionError(serviceName, err.Error())
 		return nil, err
 	}
-	
+
 	c.metrics.RecordConnectionSuccess(serviceName, duration)
 	return conn, nil
 }
@@ -242,15 +258,15 @@ func (c *GRPCClient) getCircuitBreaker(serviceName string) *circuitbreaker.Circu
 		return cb
 	}
 	c.mutex.RUnlock()
-	
+
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	
+
 	// Double-check after acquiring write lock
 	if cb, exists := c.circuitBreakers[serviceName]; exists {
 		return cb
 	}
-	
+
 	// Create new circuit breaker
 	cbConfig := &circuitbreaker.CircuitBreakerConfig{
 		Name:        serviceName,
@@ -262,7 +278,7 @@ func (c *GRPCClient) getCircuitBreaker(serviceName string) *circuitbreaker.Circu
 		},
 		OnStateChange: c.onCircuitBreakerStateChange,
 	}
-	
+
 	cb := circuitbreaker.New(cbConfig)
 	c.circuitBreakers[serviceName] = cb
 	return cb
@@ -270,7 +286,7 @@ func (c *GRPCClient) getCircuitBreaker(serviceName string) *circuitbreaker.Circu
 
 // initializeCircuitBreakers initializes circuit breakers for all services
 func (c *GRPCClient) initializeCircuitBreakers() {
-	services := []string{"auth", "crm", "hrm", "finance"}
+	services := []string{"auth", "crm", "hrm", "finance", "sales"}
 	for _, service := range services {
 		c.getCircuitBreaker(service)
 	}
@@ -284,31 +300,31 @@ func (c *GRPCClient) onCircuitBreakerStateChange(name string, from, to circuitbr
 			"from_state": string(from),
 			"to_state":   string(to),
 		})
-	
+
 	c.metrics.RecordCircuitBreakerStateChange(name, string(to))
 }
 
 // CallWithRetry executes a gRPC call with retry logic
 func (c *GRPCClient) CallWithRetry(ctx context.Context, serviceName string, fn func() error) error {
 	start := time.Now()
-	
+
 	err := c.retryConfig.ExecuteWithRetry(ctx, func() error {
 		return fn()
 	})
-	
+
 	duration := time.Since(start)
-	
+
 	if err != nil {
 		c.logger.Warn("gRPC call failed, will retry",
 			map[string]interface{}{
-				"service": serviceName,
-				"error":   err.Error(),
+				"service":  serviceName,
+				"error":    err.Error(),
 				"duration": duration.String(),
 			})
 		c.metrics.RecordCallError(serviceName, err.Error(), duration)
 		return err
 	}
-	
+
 	c.metrics.RecordCallSuccess(serviceName, duration)
 	return nil
 }
@@ -325,39 +341,39 @@ func (c *GRPCClient) HealthCheck(ctx context.Context) map[string]bool {
 		{"hrm", c.config.HRMServiceAddress},
 		{"finance", c.config.FinanceServiceAddress},
 	}
-	
+
 	for _, svc := range services {
 		conn, err := c.connManager.GetConnection(ctx, svc.address)
 		if err != nil {
 			results[svc.name] = false
 			continue
 		}
-		
+
 		healthy := c.connManager.healthCheck.CheckHealth(ctx, conn, svc.address)
 		results[svc.name] = healthy
 	}
-	
+
 	return results
 }
 
 // Close closes the gRPC client and all connections
 func (c *GRPCClient) Close() error {
 	var errs []error
-	
+
 	// Close service discovery
 	if err := c.serviceDiscovery.Close(); err != nil {
 		errs = append(errs, fmt.Errorf("failed to close service discovery: %w", err))
 	}
-	
+
 	// Close connection manager
 	if err := c.connManager.Close(); err != nil {
 		errs = append(errs, fmt.Errorf("failed to close connection manager: %w", err))
 	}
-	
+
 	if len(errs) > 0 {
 		return fmt.Errorf("errors closing gRPC client: %v", errs)
 	}
-	
+
 	return nil
 }
 

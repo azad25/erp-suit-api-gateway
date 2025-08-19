@@ -118,6 +118,78 @@ type Query {
   """
   userRole: UserRoleInfo!
 
+  # Subscription Service Queries
+
+  """
+  Get all subscription plans
+  """
+  plans(includeInactive: Boolean = false): PlansResponse!
+
+  """
+  Get subscription plan by ID
+  """
+  plan(id: ID!): PlanResponse!
+
+  """
+  Get subscription for organization
+  """
+  subscription(organizationId: ID!): SubscriptionResponse!
+
+  """
+  Get invoices for organization
+  """
+  invoices(
+    organizationId: ID!
+    limit: Int = 10
+    offset: Int = 0
+    status: String
+  ): InvoicesResponse!
+
+  """
+  Get invoice by ID
+  """
+  invoice(id: ID!): InvoiceResponse!
+
+  """
+  Get payment methods for organization
+  """
+  paymentMethods(organizationId: ID!): PaymentMethodsResponse!
+
+  """
+  Get payment method by ID
+  """
+  paymentMethod(id: ID!): PaymentMethodResponse!
+
+  """
+  Get usage for organization
+  """
+  usage(
+    organizationId: ID!
+    metric: String!
+    period: String!
+  ): UsageResponse!
+
+  """
+  Get usage history for organization
+  """
+  usageHistory(
+    organizationId: ID!
+    metric: String!
+    period: String!
+    limit: Int = 10
+    offset: Int = 0
+  ): UsageHistoryResponse!
+
+  """
+  Get billing info for organization
+  """
+  billingInfo(organizationId: ID!): BillingInfoResponse!
+
+  """
+  Subscription service health check
+  """
+  subscriptionHealth: HealthResponse!
+
   # duplicate removed
 }
 

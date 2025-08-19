@@ -1,0 +1,513 @@
+syntax = "proto3";
+
+package subscription;
+
+option go_package = "./subscription";
+
+import "google/protobuf/timestamp.proto";
+
+// Subscription service definition
+service SubscriptionService {
+  // Plan operations
+  rpc ListPlans(ListPlansRequest) returns (ListPlansResponse);
+  rpc GetPlan(GetPlanRequest) returns (GetPlanResponse);
+  rpc CreatePlan(CreatePlanRequest) returns (CreatePlanResponse);
+  rpc UpdatePlan(UpdatePlanRequest) returns (UpdatePlanResponse);
+  rpc DeletePlan(DeletePlanRequest) returns (DeletePlanResponse);
+  
+  // Subscription operations
+  rpc GetSubscription(GetSubscriptionRequest) returns (GetSubscriptionResponse);
+  rpc CreateSubscription(CreateSubscriptionRequest) returns (CreateSubscriptionResponse);
+  rpc UpdateSubscription(UpdateSubscriptionRequest) returns (UpdateSubscriptionResponse);
+  rpc CancelSubscription(CancelSubscriptionRequest) returns (CancelSubscriptionResponse);
+  rpc ReactivateSubscription(ReactivateSubscriptionRequest) returns (ReactivateSubscriptionResponse);
+  rpc ChangePlan(ChangePlanRequest) returns (ChangePlanResponse);
+  
+  // Invoice operations
+  rpc ListInvoices(ListInvoicesRequest) returns (ListInvoicesResponse);
+  rpc GetInvoice(GetInvoiceRequest) returns (GetInvoiceResponse);
+  rpc CreateInvoice(CreateInvoiceRequest) returns (CreateInvoiceResponse);
+  rpc PayInvoice(PayInvoiceRequest) returns (PayInvoiceResponse);
+  
+  // Payment method operations
+  rpc ListPaymentMethods(ListPaymentMethodsRequest) returns (ListPaymentMethodsResponse);
+  rpc GetPaymentMethod(GetPaymentMethodRequest) returns (GetPaymentMethodResponse);
+  rpc CreatePaymentMethod(CreatePaymentMethodRequest) returns (CreatePaymentMethodResponse);
+  rpc UpdatePaymentMethod(UpdatePaymentMethodRequest) returns (UpdatePaymentMethodResponse);
+  rpc DeletePaymentMethod(DeletePaymentMethodRequest) returns (DeletePaymentMethodResponse);
+  rpc SetDefaultPaymentMethod(SetDefaultPaymentMethodRequest) returns (SetDefaultPaymentMethodResponse);
+  
+  // Usage operations
+  rpc GetUsage(GetUsageRequest) returns (GetUsageResponse);
+  rpc TrackUsage(TrackUsageRequest) returns (TrackUsageResponse);
+  rpc GetUsageHistory(GetUsageHistoryRequest) returns (GetUsageHistoryResponse);
+  
+  // Billing operations
+  rpc GetBillingInfo(GetBillingInfoRequest) returns (GetBillingInfoResponse);
+  rpc UpdateBillingInfo(UpdateBillingInfoRequest) returns (UpdateBillingInfoResponse);
+  
+  // Health check
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Plan messages
+message ListPlansRequest {
+  bool include_inactive = 1;
+}
+
+message ListPlansResponse {
+  bool success = 1;
+  repeated Plan plans = 2;
+  string error = 3;
+}
+
+message GetPlanRequest {
+  string plan_id = 1;
+}
+
+message GetPlanResponse {
+  bool success = 1;
+  Plan plan = 2;
+  string error = 3;
+}
+
+message CreatePlanRequest {
+  string name = 1;
+  string description = 2;
+  double price = 3;
+  string currency = 4;
+  string billing_cycle = 5;
+  int32 max_users = 6;
+  int32 max_storage_gb = 7;
+  int32 max_projects = 8;
+  int32 max_api_calls = 9;
+  bool has_advanced_reporting = 10;
+  bool has_api_access = 11;
+  bool has_custom_integrations = 12;
+  bool has_priority_support = 13;
+  bool has_phone_support = 14;
+  bool is_popular = 15;
+}
+
+message CreatePlanResponse {
+  bool success = 1;
+  Plan plan = 2;
+  string error = 3;
+}
+
+message UpdatePlanRequest {
+  string plan_id = 1;
+  string name = 2;
+  string description = 3;
+  double price = 4;
+  string currency = 5;
+  string billing_cycle = 6;
+  int32 max_users = 7;
+  int32 max_storage_gb = 8;
+  int32 max_projects = 9;
+  int32 max_api_calls = 10;
+  bool has_advanced_reporting = 11;
+  bool has_api_access = 12;
+  bool has_custom_integrations = 13;
+  bool has_priority_support = 14;
+  bool has_phone_support = 15;
+  bool is_popular = 16;
+  bool is_active = 17;
+}
+
+message UpdatePlanResponse {
+  bool success = 1;
+  Plan plan = 2;
+  string error = 3;
+}
+
+message DeletePlanRequest {
+  string plan_id = 1;
+}
+
+message DeletePlanResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// Subscription messages
+message GetSubscriptionRequest {
+  string organization_id = 1;
+}
+
+message GetSubscriptionResponse {
+  bool success = 1;
+  Subscription subscription = 2;
+  string error = 3;
+}
+
+message CreateSubscriptionRequest {
+  string organization_id = 1;
+  string plan_id = 2;
+  string billing_cycle = 3;
+  string payment_method_id = 4;
+  bool start_trial = 5;
+  int32 trial_days = 6;
+}
+
+message CreateSubscriptionResponse {
+  bool success = 1;
+  Subscription subscription = 2;
+  Invoice invoice = 3;
+  string error = 4;
+}
+
+message UpdateSubscriptionRequest {
+  string subscription_id = 1;
+  string billing_cycle = 2;
+  bool cancel_at_period_end = 3;
+}
+
+message UpdateSubscriptionResponse {
+  bool success = 1;
+  Subscription subscription = 2;
+  string error = 3;
+}
+
+message CancelSubscriptionRequest {
+  string subscription_id = 1;
+  bool cancel_at_period_end = 2;
+}
+
+message CancelSubscriptionResponse {
+  bool success = 1;
+  Subscription subscription = 2;
+  string error = 3;
+}
+
+message ReactivateSubscriptionRequest {
+  string subscription_id = 1;
+}
+
+message ReactivateSubscriptionResponse {
+  bool success = 1;
+  Subscription subscription = 2;
+  string error = 3;
+}
+
+message ChangePlanRequest {
+  string subscription_id = 1;
+  string new_plan_id = 2;
+  bool prorate = 3;
+}
+
+message ChangePlanResponse {
+  bool success = 1;
+  Subscription subscription = 2;
+  Invoice proration_invoice = 3;
+  string error = 4;
+}
+
+// Invoice messages
+message ListInvoicesRequest {
+  string organization_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+  string status = 4;
+}
+
+message ListInvoicesResponse {
+  bool success = 1;
+  repeated Invoice invoices = 2;
+  int32 total_count = 3;
+  bool has_next_page = 4;
+  string error = 5;
+}
+
+message GetInvoiceRequest {
+  string invoice_id = 1;
+}
+
+message GetInvoiceResponse {
+  bool success = 1;
+  Invoice invoice = 2;
+  string error = 3;
+}
+
+message CreateInvoiceRequest {
+  string organization_id = 1;
+  string subscription_id = 2;
+  double amount = 3;
+  string currency = 4;
+  google.protobuf.Timestamp period_start = 5;
+  google.protobuf.Timestamp period_end = 6;
+  google.protobuf.Timestamp due_date = 7;
+}
+
+message CreateInvoiceResponse {
+  bool success = 1;
+  Invoice invoice = 2;
+  string error = 3;
+}
+
+message PayInvoiceRequest {
+  string invoice_id = 1;
+  string payment_method_id = 2;
+}
+
+message PayInvoiceResponse {
+  bool success = 1;
+  Invoice invoice = 2;
+  string error = 3;
+}
+
+// Payment method messages
+message ListPaymentMethodsRequest {
+  string organization_id = 1;
+}
+
+message ListPaymentMethodsResponse {
+  bool success = 1;
+  repeated PaymentMethod payment_methods = 2;
+  string error = 3;
+}
+
+message GetPaymentMethodRequest {
+  string payment_method_id = 1;
+}
+
+message GetPaymentMethodResponse {
+  bool success = 1;
+  PaymentMethod payment_method = 2;
+  string error = 3;
+}
+
+message CreatePaymentMethodRequest {
+  string organization_id = 1;
+  string type = 2;
+  string brand = 3;
+  string last4 = 4;
+  int32 expiry_month = 5;
+  int32 expiry_year = 6;
+  string email = 7;
+  bool is_default = 8;
+}
+
+message CreatePaymentMethodResponse {
+  bool success = 1;
+  PaymentMethod payment_method = 2;
+  string error = 3;
+}
+
+message UpdatePaymentMethodRequest {
+  string payment_method_id = 1;
+  bool is_default = 2;
+  bool is_active = 3;
+}
+
+message UpdatePaymentMethodResponse {
+  bool success = 1;
+  PaymentMethod payment_method = 2;
+  string error = 3;
+}
+
+message DeletePaymentMethodRequest {
+  string payment_method_id = 1;
+}
+
+message DeletePaymentMethodResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message SetDefaultPaymentMethodRequest {
+  string payment_method_id = 1;
+}
+
+message SetDefaultPaymentMethodResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// Usage messages
+message GetUsageRequest {
+  string organization_id = 1;
+  string metric = 2;
+  string period = 3;
+}
+
+message GetUsageResponse {
+  bool success = 1;
+  Usage usage = 2;
+  string error = 3;
+}
+
+message TrackUsageRequest {
+  string organization_id = 1;
+  string subscription_id = 2;
+  string metric = 3;
+  double value = 4;
+  double limit = 5;
+  string period = 6;
+  google.protobuf.Timestamp date = 7;
+}
+
+message TrackUsageResponse {
+  bool success = 1;
+  Usage usage = 2;
+  string error = 3;
+}
+
+message GetUsageHistoryRequest {
+  string organization_id = 1;
+  string metric = 2;
+  string period = 3;
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+message GetUsageHistoryResponse {
+  bool success = 1;
+  repeated Usage usage_history = 2;
+  int32 total_count = 3;
+  string error = 4;
+}
+
+// Billing messages
+message GetBillingInfoRequest {
+  string organization_id = 1;
+}
+
+message GetBillingInfoResponse {
+  bool success = 1;
+  BillingInfo billing_info = 2;
+  string error = 3;
+}
+
+message UpdateBillingInfoRequest {
+  string organization_id = 1;
+  BillingInfo billing_info = 2;
+}
+
+message UpdateBillingInfoResponse {
+  bool success = 1;
+  BillingInfo billing_info = 2;
+  string error = 3;
+}
+
+// Health check
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;
+  string service = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+// Data models
+message Plan {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  double price = 4;
+  string currency = 5;
+  string billing_cycle = 6;
+  bool is_active = 7;
+  bool is_popular = 8;
+  int32 max_users = 9;
+  int32 max_storage_gb = 10;
+  int32 max_projects = 11;
+  int32 max_api_calls = 12;
+  bool has_advanced_reporting = 13;
+  bool has_api_access = 14;
+  bool has_custom_integrations = 15;
+  bool has_priority_support = 16;
+  bool has_phone_support = 17;
+  google.protobuf.Timestamp created_at = 18;
+  google.protobuf.Timestamp updated_at = 19;
+}
+
+message Subscription {
+  string id = 1;
+  string organization_id = 2;
+  string plan_id = 3;
+  string status = 4;
+  google.protobuf.Timestamp current_period_start = 5;
+  google.protobuf.Timestamp current_period_end = 6;
+  bool cancel_at_period_end = 7;
+  google.protobuf.Timestamp canceled_at = 8;
+  google.protobuf.Timestamp ended_at = 9;
+  google.protobuf.Timestamp trial_start = 10;
+  google.protobuf.Timestamp trial_end = 11;
+  string billing_cycle = 12;
+  double amount = 13;
+  string currency = 14;
+  int32 max_users = 15;
+  int32 current_users = 16;
+  int32 max_storage_gb = 17;
+  double current_storage_gb = 18;
+  google.protobuf.Timestamp created_at = 19;
+  google.protobuf.Timestamp updated_at = 20;
+  Plan plan = 21;
+}
+
+message Invoice {
+  string id = 1;
+  string organization_id = 2;
+  string subscription_id = 3;
+  string invoice_number = 4;
+  string status = 5;
+  double amount = 6;
+  string currency = 7;
+  double tax_amount = 8;
+  double discount_amount = 9;
+  double total_amount = 10;
+  google.protobuf.Timestamp period_start = 11;
+  google.protobuf.Timestamp period_end = 12;
+  google.protobuf.Timestamp due_date = 13;
+  google.protobuf.Timestamp paid_at = 14;
+  string payment_method_id = 15;
+  string payment_intent_id = 16;
+  google.protobuf.Timestamp created_at = 17;
+  google.protobuf.Timestamp updated_at = 18;
+}
+
+message PaymentMethod {
+  string id = 1;
+  string organization_id = 2;
+  string type = 3;
+  string brand = 4;
+  string last4 = 5;
+  int32 expiry_month = 6;
+  int32 expiry_year = 7;
+  string email = 8;
+  bool is_default = 9;
+  bool is_active = 10;
+  string provider_id = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+}
+
+message Usage {
+  string id = 1;
+  string organization_id = 2;
+  string subscription_id = 3;
+  string metric = 4;
+  double value = 5;
+  double limit = 6;
+  string period = 7;
+  google.protobuf.Timestamp date = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message BillingInfo {
+  string organization_id = 1;
+  string company_name = 2;
+  string address_line1 = 3;
+  string address_line2 = 4;
+  string city = 5;
+  string state = 6;
+  string postal_code = 7;
+  string country = 8;
+  string tax_id = 9;
+  string email = 10;
+  string phone = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+} 
