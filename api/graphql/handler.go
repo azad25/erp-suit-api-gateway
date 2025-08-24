@@ -18,6 +18,7 @@ import (
 	"erp-api-gateway/api/graphql/generated"
 	"erp-api-gateway/api/graphql/resolver"
 	"erp-api-gateway/internal/config"
+	"erp-api-gateway/internal/interfaces"
 	"erp-api-gateway/internal/logging"
 	"erp-api-gateway/internal/services"
 	"erp-api-gateway/internal/services/grpc_client"
@@ -25,13 +26,13 @@ import (
 
 // GraphQLHandler handles GraphQL requests
 type GraphQLHandler struct {
-	config        *config.Config
-	logger        logging.Logger
-	grpcClient    *grpc_client.GRPCClient
-	redisClient   *services.RedisClient
-	kafkaProducer *services.KafkaProducer
-	dataLoader    *dataloader.DataLoader
-	server        *handler.Server
+	config         *config.Config
+	logger         logging.Logger
+	grpcClient     *grpc_client.GRPCClient
+	redisClient    *services.RedisClient
+	eventPublisher interfaces.EventPublisher
+	dataLoader     *dataloader.DataLoader
+	server         *handler.Server
 }
 
 // NewGraphQLHandler creates a new GraphQL handler
@@ -40,19 +41,19 @@ func NewGraphQLHandler(
 	logger logging.Logger,
 	grpcClient *grpc_client.GRPCClient,
 	redisClient *services.RedisClient,
-	kafkaProducer *services.KafkaProducer,
+	eventPublisher interfaces.EventPublisher,
 ) *GraphQLHandler {
 	// Create DataLoader
 	dl := dataloader.NewDataLoader(grpcClient)
 
 	// Create resolver with dependencies
 	resolver := &resolver.Resolver{
-		Config:        cfg,
-		Logger:        logger,
-		GRPCClient:    grpcClient,
-		RedisClient:   redisClient,
-		KafkaProducer: kafkaProducer,
-		DataLoader:    dl,
+		Config:         cfg,
+		Logger:         logger,
+		GRPCClient:     grpcClient,
+		RedisClient:    redisClient,
+		EventPublisher: eventPublisher,
+		DataLoader:     dl,
 	}
 
 	// Create GraphQL server
@@ -92,13 +93,13 @@ func NewGraphQLHandler(
 	srv.Use(extension.FixedComplexityLimit(1000))
 
 	return &GraphQLHandler{
-		config:        cfg,
-		logger:        logger,
-		grpcClient:    grpcClient,
-		redisClient:   redisClient,
-		kafkaProducer: kafkaProducer,
-		dataLoader:    dl,
-		server:        srv,
+		config:         cfg,
+		logger:         logger,
+		grpcClient:     grpcClient,
+		redisClient:    redisClient,
+		eventPublisher: eventPublisher,
+		dataLoader:     dl,
+		server:         srv,
 	}
 }
 

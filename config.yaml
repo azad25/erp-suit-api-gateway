@@ -98,10 +98,10 @@ websocket:
 
 # Health Check Optimization
 health:
-  cache_timeout: "30s"        # Cache health status for 30 seconds
-  check_interval: "60s"       # Background checks every 60 seconds
-  max_concurrent_checks: 3    # Max 3 concurrent health checks
-  http_timeout: "5s"          # HTTP health check timeout
+  cache_timeout: "60s"        # Cache health status for 60 seconds (increased from 30s)
+  check_interval: "120s"      # Background checks every 2 minutes (increased from 60s)
+  max_concurrent_checks: 2    # Max 2 concurrent health checks (reduced from 3)
+  http_timeout: "10s"         # HTTP health check timeout (increased from 5s)
 
 jwt:
   secret: "your-super-secret-jwt-key-change-in-production"  # Shared secret for HS256
@@ -112,11 +112,11 @@ jwt:
   issuer: "erp-auth-service"
 
 logging:
-  level: "info"  # debug, info, warn, error, fatal
+  level: "warn"  # debug, info, warn, error, fatal - Reduced from info to warn
   format: "json"  # json, text
   output: "stdout"  # stdout, stderr, file
-  buffer_size: 1000
-  flush_interval: "5s"
+  buffer_size: 500  # Reduced from 1000 to 500
+  flush_interval: "10s"  # Increased from 5s to 10s
   elasticsearch:
     urls:
       - "http://elasticsearch:9200"

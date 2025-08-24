@@ -30,7 +30,7 @@ type Server struct {
 	logger         interfaces.Logger
 	grpcClient     *grpc_client.GRPCClient
 	redisClient    *services.RedisClient
-	kafkaProducer  *services.KafkaProducer
+	eventPublisher interfaces.EventPublisher
 	jwtValidator   interfaces.JWTValidator
 	policyEngine   interfaces.PolicyEngine
 	wsHandler      *ws.Handler
@@ -40,12 +40,12 @@ type Server struct {
 
 // Dependencies holds all the dependencies needed by the server
 type Dependencies struct {
-	Logger        interfaces.Logger
-	GRPCClient    *grpc_client.GRPCClient
-	RedisClient   *services.RedisClient
-	KafkaProducer *services.KafkaProducer
-	JWTValidator  interfaces.JWTValidator
-	PolicyEngine  interfaces.PolicyEngine
+	Logger         interfaces.Logger
+	GRPCClient     *grpc_client.GRPCClient
+	RedisClient    *services.RedisClient
+	EventPublisher interfaces.EventPublisher
+	JWTValidator   interfaces.JWTValidator
+	PolicyEngine   interfaces.PolicyEngine
 }
 
 // New creates a new server instance
@@ -77,7 +77,7 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 		logging.NewNoOpLogger(),
 		deps.GRPCClient,
 		deps.RedisClient,
-		deps.KafkaProducer,
+		deps.EventPublisher,
 	)
 
 	// Note: Removed GraphQL and WebSocket proxies - using local handlers instead
@@ -94,8 +94,9 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 		healthManager.RegisterChecker(health.NewGRPCHealthChecker(deps.GRPCClient, "auth"))
 	}
 
-	if deps.KafkaProducer != nil {
-		healthManager.RegisterChecker(health.NewKafkaHealthChecker(deps.KafkaProducer))
+	// Register Kafka health checker only if EventPublisher is a KafkaProducer
+	if kafkaProducer, ok := deps.EventPublisher.(*services.KafkaProducer); ok {
+		healthManager.RegisterChecker(health.NewKafkaHealthChecker(kafkaProducer))
 	}
 
 	// Note: Removed health checkers for non-existent infrastructure services
@@ -106,7 +107,7 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 		logger:         deps.Logger,
 		grpcClient:     deps.GRPCClient,
 		redisClient:    deps.RedisClient,
-		kafkaProducer:  deps.KafkaProducer,
+		eventPublisher: deps.EventPublisher,
 		jwtValidator:   deps.JWTValidator,
 		policyEngine:   deps.PolicyEngine,
 		wsHandler:      wsHandler,
@@ -279,7 +280,7 @@ func (s *Server) setupRESTRoutes() {
 	routerConfig := &rest.RouterConfig{
 		GRPCClient:     s.grpcClient,
 		CacheService:   s.redisClient,
-		EventPublisher: s.kafkaProducer,
+		EventPublisher: s.eventPublisher,
 		Logger:         logging.NewSimpleLogger(s.logger),
 	}
 

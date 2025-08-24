@@ -59,7 +59,7 @@ func (r *mutationResolver) Authenticate(ctx context.Context, input model.LoginIn
 			},
 			Timestamp: time.Now(),
 		}
-		if err := r.KafkaProducer.PublishUserEvent(context.Background(), resp.User.Id, event); err != nil {
+		if err := r.EventPublisher.PublishUserEvent(context.Background(), resp.User.Id, event); err != nil {
 			r.Logger.Error("Failed to publish login event", map[string]interface{}{
 				"error":   err,
 				"user_id": resp.User.Id,
@@ -123,7 +123,7 @@ func (r *mutationResolver) CreateUser(ctx context.Context, input model.RegisterI
 			},
 			Timestamp: time.Now(),
 		}
-		if err := r.KafkaProducer.PublishUserEvent(context.Background(), resp.User.Id, event); err != nil {
+		if err := r.EventPublisher.PublishUserEvent(context.Background(), resp.User.Id, event); err != nil {
 			r.Logger.Error("Failed to publish registration event", map[string]interface{}{
 				"error":   err,
 				"user_id": resp.User.Id,
@@ -162,7 +162,7 @@ func (r *mutationResolver) RevokeToken(ctx context.Context) (*model.MutationResp
 			},
 			Timestamp: time.Now(),
 		}
-		if err := r.KafkaProducer.PublishUserEvent(context.Background(), userID, event); err != nil {
+		if err := r.EventPublisher.PublishUserEvent(context.Background(), userID, event); err != nil {
 			r.Logger.Error("Failed to publish logout event", map[string]interface{}{
 				"error":   err,
 				"user_id": userID,

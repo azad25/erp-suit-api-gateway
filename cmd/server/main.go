@@ -9,6 +9,7 @@ import (
 
 	"erp-api-gateway/internal/auth"
 	"erp-api-gateway/internal/config"
+	"erp-api-gateway/internal/interfaces"
 	"erp-api-gateway/internal/logging"
 	"erp-api-gateway/internal/rbac"
 	"erp-api-gateway/internal/server"
@@ -35,12 +36,15 @@ func main() {
 	defer redisClient.Close()
 
 	// Initialize Kafka producer (optional for testing)
+	var eventPublisher interfaces.EventPublisher
 	kafkaProducer, err := services.NewKafkaProducer(&cfg.Kafka)
 	if err != nil {
 		log.Printf("Warning: Failed to initialize Kafka producer: %v", err)
-		log.Println("Continuing without Kafka producer...")
-		kafkaProducer = nil
+		log.Println("Using no-op event publisher as fallback...")
+		eventPublisher = services.NewNoOpEventPublisher()
 	} else {
+		log.Println("Kafka producer initialized successfully")
+		eventPublisher = kafkaProducer
 		defer kafkaProducer.Close()
 	}
 
@@ -59,12 +63,12 @@ func main() {
 
 	// Create server dependencies
 	deps := &server.Dependencies{
-		Logger:        logger,
-		GRPCClient:    grpcClient,
-		RedisClient:   redisClient,
-		KafkaProducer: kafkaProducer,
-		JWTValidator:  jwtValidator,
-		PolicyEngine:  policyEngine,
+		Logger:         logger,
+		GRPCClient:     grpcClient,
+		RedisClient:    redisClient,
+		EventPublisher: eventPublisher,
+		JWTValidator:   jwtValidator,
+		PolicyEngine:   policyEngine,
 	}
 
 	// Create and start server
