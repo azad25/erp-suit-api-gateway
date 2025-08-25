@@ -126,8 +126,9 @@ func (d *ConsulServiceDiscovery) Close() error {
 
 // ServiceEndpoints holds static service endpoints
 type ServiceEndpoints struct {
-	AuthService    string
-	CRMService     string
-	HRMService     string
-	FinanceService string
+	AuthService      string
+	CRMService       string
+	HRMService       string
+	FinanceService   string
+	AICopilotService string
 }

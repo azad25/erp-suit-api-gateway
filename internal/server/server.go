@@ -68,6 +68,7 @@ func New(cfg *config.Config, deps *Dependencies) *Server {
 			deps.RedisClient,
 			logging.NewSimpleLogger(deps.Logger),
 			deps.JWTValidator,
+			deps.GRPCClient,
 		)
 	}
 
@@ -313,6 +314,19 @@ func (s *Server) setupRESTRoutes() {
 			authV1.GET("/me", s.requireAuth(), s.getRESTAuthHandler(routerConfig).GetCurrentUser)
 		}
 
+		// AI Copilot routes
+		aiV1 := v1.Group("/ai")
+		{
+			// Chat with AI (single response)
+			aiV1.POST("/chat", s.getRESTAIHandler(routerConfig).Chat)
+			
+			// Chat with AI (streaming response)
+			aiV1.POST("/chat/stream", s.getRESTAIHandler(routerConfig).StreamChat)
+			
+			// Health check
+			aiV1.GET("/health", s.getRESTAIHandler(routerConfig).HealthCheck)
+		}
+
 		// Future API routes will be added here
 		// e.g., CRM, HRM, Finance routes
 	}
@@ -326,6 +340,11 @@ func (s *Server) getRESTAuthHandler(config *rest.RouterConfig) *rest.AuthHandler
 		config.EventPublisher,
 		config.Logger,
 	)
+}
+
+// getRESTAIHandler creates and returns a REST AI handler
+func (s *Server) getRESTAIHandler(config *rest.RouterConfig) *rest.AIHandler {
+	return rest.NewAIHandler(config.GRPCClient)
 }
 
 // Middleware helper functions

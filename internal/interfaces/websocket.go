@@ -60,6 +60,9 @@ const (
 	MessageTypeUnsubscribe  = "unsubscribe"
 	MessageTypeError        = "error"
 	MessageTypeAck          = "ack"
+	MessageTypeAIChat       = "ai_chat"
+	MessageTypeAIStream     = "ai_stream"
+	MessageTypeAIStatus     = "ai_status"
 )
 
 // WebSocketError represents a WebSocket error

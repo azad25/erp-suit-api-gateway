@@ -13,6 +13,8 @@ import (
 
 	"erp-api-gateway/internal/config"
 	"erp-api-gateway/internal/interfaces"
+	"erp-api-gateway/internal/services/grpc_client"
+	aipb "erp-api-gateway/proto/gen/ai/proto"
 )
 
 // Handler handles WebSocket connections and real-time messaging
@@ -24,6 +26,7 @@ type Handler struct {
 	jwtValidator    interfaces.JWTValidator
 	config          *config.WebSocketConfig
 	subscription    interfaces.PubSubSubscription
+	grpcClient      *grpc_client.GRPCClient
 	ctx             context.Context
 	cancel          context.CancelFunc
 }
@@ -34,6 +37,7 @@ func NewHandler(
 	redisClient interfaces.PubSubService,
 	logger interfaces.SimpleLogger,
 	jwtValidator interfaces.JWTValidator,
+	grpcClient *grpc_client.GRPCClient,
 ) *Handler {
 	// Create WebSocket upgrader
 	upgrader := websocket.Upgrader{
@@ -69,6 +73,7 @@ func NewHandler(
 		logger:       logger,
 		jwtValidator: jwtValidator,
 		config:       cfg,
+		grpcClient:   grpcClient,
 		ctx:          ctx,
 		cancel:       cancel,
 	}
@@ -155,6 +160,100 @@ func (h *Handler) BroadcastToChannel(ctx context.Context, channel string, messag
 // GetConnectionCount returns the total number of active connections
 func (h *Handler) GetConnectionCount() int {
 	return h.manager.GetConnectionCount()
+}
+
+// ProcessAIChat processes an AI chat request via WebSocket
+func (h *Handler) ProcessAIChat(ctx context.Context, userID string, message string, conversationID string, agentType string, model string) (*aipb.ChatResponse, error) {
+	if h.grpcClient == nil {
+		return nil, fmt.Errorf("gRPC client not initialized")
+	}
+
+	client, err := h.grpcClient.AICopilotService(ctx)
+	if err != nil {
+		h.logger.LogError(ctx, "Failed to get AI Copilot service client", map[string]interface{}{
+			"user_id": userID,
+			"error":   err.Error(),
+		})
+		return nil, fmt.Errorf("failed to get AI service client: %w", err)
+	}
+
+	request := &aipb.ChatRequest{
+		Message:        message,
+		UserId:         userID,
+		ConversationId: conversationID,
+		AgentType:      agentType,
+		Model:          model,
+	}
+
+	response, err := client.Chat(ctx, request)
+	if err != nil {
+		h.logger.LogError(ctx, "AI chat request failed", map[string]interface{}{
+			"user_id": userID,
+			"error":   err.Error(),
+		})
+		return nil, fmt.Errorf("AI chat request failed: %w", err)
+	}
+
+	return response, nil
+}
+
+// ProcessAIChatStream processes a streaming AI chat request via WebSocket
+func (h *Handler) ProcessAIChatStream(ctx context.Context, userID string, message string, conversationID string, agentType string, model string) (<-chan *aipb.ChatResponse, error) {
+	if h.grpcClient == nil {
+		return nil, fmt.Errorf("gRPC client not initialized")
+	}
+
+	client, err := h.grpcClient.AICopilotService(ctx)
+	if err != nil {
+		h.logger.LogError(ctx, "Failed to get AI Copilot service client", map[string]interface{}{
+			"user_id": userID,
+			"error":   err.Error(),
+		})
+		return nil, fmt.Errorf("failed to get AI service client: %w", err)
+	}
+
+	request := &aipb.ChatRequest{
+		Message:        message,
+		UserId:         userID,
+		ConversationId: conversationID,
+		AgentType:      agentType,
+		Model:          model,
+	}
+
+	stream, err := client.StreamChat(ctx, request)
+	if err != nil {
+		h.logger.LogError(ctx, "AI chat stream request failed", map[string]interface{}{
+			"user_id": userID,
+			"error":   err.Error(),
+		})
+		return nil, fmt.Errorf("AI chat stream request failed: %w", err)
+	}
+
+	responseChan := make(chan *aipb.ChatResponse, 10)
+
+	go func() {
+		defer close(responseChan)
+		for {
+			response, err := stream.Recv()
+			if err != nil {
+				if err.Error() != "EOF" {
+					h.logger.LogError(ctx, "Error receiving AI stream response", map[string]interface{}{
+						"user_id": userID,
+						"error":   err.Error(),
+					})
+				}
+				return
+			}
+			responseChan <- response
+		}
+	}()
+
+	return responseChan, nil
+}
+
+// GetHandler returns the handler instance for AI service access
+func (h *Handler) GetHandler() *Handler {
+	return h
 }
 
 // Close closes the WebSocket handler and all connections

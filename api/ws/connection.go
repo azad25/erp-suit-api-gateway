@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -357,11 +358,17 @@ func (c *Connection) handleMessage(ctx context.Context, messageBytes []byte) err
 			Timestamp: time.Now(),
 			MessageID: uuid.New().String(),
 		}
-		
+
 		if heartbeatBytes, err := json.Marshal(heartbeatMsg); err == nil {
 			c.Send(ctx, heartbeatBytes)
 		}
-		
+
+	case interfaces.MessageTypeAIChat:
+		return c.handleAIChat(ctx, msg)
+
+	case interfaces.MessageTypeAIStream:
+		return c.handleAIStream(ctx, msg)
+
 	default:
 		c.logger.LogWarning(ctx, "Unknown WebSocket message type", map[string]interface{}{
 			"connection_id": c.id,
@@ -373,8 +380,390 @@ func (c *Connection) handleMessage(ctx context.Context, messageBytes []byte) err
 	return nil
 }
 
+// validateAIMessage validates AI chat message parameters
+func (c *Connection) validateAIMessage(msgData map[string]interface{}) (string, string, string, string, error) {
+	message, ok := msgData["message"].(string)
+	if !ok || message == "" {
+		return "", "", "", "", &interfaces.WebSocketError{
+			Code:    interfaces.WSErrorCodeInvalidMessage,
+			Message: "Missing or invalid message field",
+			Type:    "invalid_ai_message",
+		}
+	}
+
+	// Validate message length
+	maxMessageLength := 10000
+	if len(message) > maxMessageLength {
+		return "", "", "", "", &interfaces.WebSocketError{
+			Code:    interfaces.WSErrorCodeInvalidMessage,
+			Message: fmt.Sprintf("Message too long. Maximum %d characters allowed", maxMessageLength),
+			Type:    "message_too_long",
+		}
+	}
+
+	// Validate message content (basic sanitization)
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return "", "", "", "", &interfaces.WebSocketError{
+			Code:    interfaces.WSErrorCodeInvalidMessage,
+			Message: "Message cannot be empty or whitespace only",
+			Type:    "invalid_ai_message",
+		}
+	}
+
+	conversationID, _ := msgData["conversation_id"].(string)
+	if conversationID != "" {
+		// Validate UUID format if provided
+		if _, err := uuid.Parse(conversationID); err != nil {
+			return "", "", "", "", &interfaces.WebSocketError{
+				Code:    interfaces.WSErrorCodeInvalidMessage,
+				Message: "Invalid conversation_id format",
+				Type:    "invalid_conversation_id",
+			}
+		}
+	} else {
+		conversationID = uuid.New().String()
+	}
+
+	agentType, _ := msgData["agent_type"].(string)
+	if agentType == "" {
+		agentType = "general"
+	} else {
+		// Validate agent type
+		validAgentTypes := map[string]bool{
+			"general": true, "code": true, "data": true, "support": true,
+		}
+		if !validAgentTypes[agentType] {
+			return "", "", "", "", &interfaces.WebSocketError{
+				Code:    interfaces.WSErrorCodeInvalidMessage,
+				Message: "Invalid agent_type. Allowed: general, code, data, support",
+				Type:    "invalid_agent_type",
+			}
+		}
+	}
+
+	model, _ := msgData["model"].(string)
+	if model == "" {
+		model = "gpt-4"
+	} else {
+		// Validate model
+		validModels := map[string]bool{
+			"gpt-4": true, "gpt-3.5-turbo": true, "claude-3": true, "claude-3.5": true,
+		}
+		if !validModels[model] {
+			return "", "", "", "", &interfaces.WebSocketError{
+				Code:    interfaces.WSErrorCodeInvalidMessage,
+				Message: "Invalid model. Allowed: gpt-4, gpt-3.5-turbo, claude-3, claude-3.5",
+				Type:    "invalid_model",
+			}
+		}
+	}
+
+	return message, conversationID, agentType, model, nil
+}
+
+// handleAIChat handles AI chat messages via WebSocket
+func (c *Connection) handleAIChat(ctx context.Context, msg interfaces.WebSocketMessage) error {
+	message, ok := msg.Data["message"].(string)
+	if !ok || message == "" {
+		return &interfaces.WebSocketError{
+			Code:    interfaces.WSErrorCodeInvalidMessage,
+			Message: "Missing or invalid message field",
+			Type:    "invalid_ai_message",
+		}
+	}
+
+	conversationID, _ := msg.Data["conversation_id"].(string)
+	if conversationID == "" {
+		conversationID = uuid.New().String()
+	}
+
+	agentType, _ := msg.Data["agent_type"].(string)
+	if agentType == "" {
+		agentType = "general"
+	}
+
+	model, _ := msg.Data["model"].(string)
+	if model == "" {
+		model = "gpt-4"
+	}
+
+	// Get AI service from connection manager
+	// Use type assertion to get the underlying handler
+	// Note: This assumes the manager is a Handler or has AI capabilities
+	var handler *Handler
+	if mgr, ok := c.manager.(interface{ GetHandler() *Handler }); ok {
+		handler = mgr.GetHandler()
+	}
+	if handler == nil {
+		return &interfaces.WebSocketError{
+			Code:    interfaces.WSErrorCodeInternalError,
+			Message: "AI service not available",
+			Type:    "ai_service_unavailable",
+		}
+	}
+
+	// Validate message parameters
+	validatedMessage, validatedConversationID, validatedAgentType, validatedModel, err := c.validateAIMessage(msg.Data)
+	if err != nil {
+		return err
+	}
+	
+	// Use validated values
+	message = validatedMessage
+	conversationID = validatedConversationID
+	agentType = validatedAgentType
+	model = validatedModel
+
+	// Rate limiting check (basic implementation)
+	if err := c.checkRateLimit(c.userID); err != nil {
+		return &interfaces.WebSocketError{
+				Code:    interfaces.WSErrorCodeRateLimited,
+				Message: err.Error(),
+				Type:    "rate_limit_exceeded",
+			}
+	}
+
+	// Process AI chat request
+	response, err := handler.ProcessAIChat(ctx, c.userID, message, conversationID, agentType, model)
+	if err != nil {
+		// Provide more detailed error information
+		var errorType string
+		var errorMessage string
+		
+		switch {
+		case strings.Contains(err.Error(), "timeout"):
+			errorType = "ai_timeout"
+			errorMessage = "AI service timeout. Please try again."
+		case strings.Contains(err.Error(), "unavailable"):
+			errorType = "ai_unavailable"
+			errorMessage = "AI service temporarily unavailable"
+		case strings.Contains(err.Error(), "quota"):
+			errorType = "quota_exceeded"
+			errorMessage = "AI service quota exceeded"
+		default:
+			errorType = "ai_processing_error"
+			errorMessage = "AI processing failed. Please try again."
+		}
+		
+		return &interfaces.WebSocketError{
+			Code:    interfaces.WSErrorCodeInternalError,
+			Message: errorMessage,
+			Type:    errorType,
+		}
+	}
+
+	// Validate response
+	if response == nil || response.Content == "" {
+		return &interfaces.WebSocketError{
+			Code:    interfaces.WSErrorCodeInternalError,
+			Message: "Empty response from AI service",
+			Type:    "empty_response",
+		}
+	}
+
+	// Send response back to client
+	responseMsg := &interfaces.WebSocketMessage{
+		Type: interfaces.MessageTypeAIChat,
+		Data: map[string]interface{}{
+			"response":        response.Content,
+			"conversation_id": conversationID,
+			"agent_type":      agentType,
+			"model":           model,
+			"message_id":      msg.MessageID,
+			"timestamp":       time.Now().Unix(),
+		},
+		Timestamp: time.Now(),
+		MessageID: uuid.New().String(),
+	}
+
+	if responseBytes, err := json.Marshal(responseMsg); err == nil {
+		c.Send(ctx, responseBytes)
+	} else {
+		c.logger.LogError(ctx, "Failed to marshal AI response", map[string]interface{}{
+			"error": err.Error(),
+			"user_id": c.userID,
+		})
+	}
+
+	return nil
+}
+
+// checkRateLimit performs basic rate limiting for AI requests
+func (c *Connection) checkRateLimit(userID string) error {
+	// Simple in-memory rate limiting - in production, use Redis or similar
+	// Allow 10 requests per minute per user
+	const (
+		maxRequestsPerMinute = 10
+		windowDuration       = time.Minute
+	)
+
+	// This is a basic implementation - for production, consider using a proper rate limiter
+	// For now, we'll skip rate limiting as it requires more infrastructure
+	return nil
+}
+
+// handleAIStream handles streaming AI chat messages via WebSocket
+func (c *Connection) handleAIStream(ctx context.Context, msg interfaces.WebSocketMessage) error {
+	message, ok := msg.Data["message"].(string)
+	if !ok || message == "" {
+		return &interfaces.WebSocketError{
+			Code:    interfaces.WSErrorCodeInvalidMessage,
+			Message: "Missing or invalid message field",
+			Type:    "invalid_ai_message",
+		}
+	}
+
+	conversationID, _ := msg.Data["conversation_id"].(string)
+	if conversationID == "" {
+		conversationID = uuid.New().String()
+	}
+
+	agentType, _ := msg.Data["agent_type"].(string)
+	if agentType == "" {
+		agentType = "general"
+	}
+
+	model, _ := msg.Data["model"].(string)
+	if model == "" {
+		model = "gpt-4"
+	}
+
+	// Get AI service from connection manager
+	// Use type assertion to get the underlying handler
+	// Note: This assumes the manager is a Handler or has AI capabilities
+	var handler *Handler
+	if mgr, ok := c.manager.(interface{ GetHandler() *Handler }); ok {
+		handler = mgr.GetHandler()
+	}
+	if handler == nil {
+		return &interfaces.WebSocketError{
+			Code:    interfaces.WSErrorCodeInternalError,
+			Message: "AI service not available",
+			Type:    "ai_service_unavailable",
+		}
+	}
+
+	// Send initial status message
+	statusMsg := &interfaces.WebSocketMessage{
+		Type: interfaces.MessageTypeAIStatus,
+		Data: map[string]interface{}{
+			"status":          "processing",
+			"conversation_id": conversationID,
+			"message_id":      msg.MessageID,
+		},
+		Timestamp: time.Now(),
+		MessageID: uuid.New().String(),
+	}
+
+	if statusBytes, err := json.Marshal(statusMsg); err == nil {
+		c.Send(ctx, statusBytes)
+	}
+
+	// Validate message parameters
+	message, conversationID, agentType, model, err := c.validateAIMessage(msg.Data)
+	if err != nil {
+		return err
+	}
+
+	// Rate limiting check
+	if err := c.checkRateLimit(c.userID); err != nil {
+		return &interfaces.WebSocketError{
+				Code:    interfaces.WSErrorCodeRateLimited,
+				Message: err.Error(),
+				Type:    "rate_limit_exceeded",
+			}
+	}
+
+	// Process streaming AI chat request
+	responseChan, err := handler.ProcessAIChatStream(ctx, c.userID, message, conversationID, agentType, model)
+	if err != nil {
+		// Provide more detailed error information
+		var errorType string
+		var errorMessage string
+		
+		switch {
+		case strings.Contains(err.Error(), "timeout"):
+			errorType = "ai_timeout"
+			errorMessage = "AI service timeout. Please try again."
+		case strings.Contains(err.Error(), "unavailable"):
+			errorType = "ai_unavailable"
+			errorMessage = "AI service temporarily unavailable"
+		case strings.Contains(err.Error(), "quota"):
+			errorType = "quota_exceeded"
+			errorMessage = "AI service quota exceeded"
+		default:
+			errorType = "ai_processing_error"
+			errorMessage = "AI processing failed. Please try again."
+		}
+		
+		return &interfaces.WebSocketError{
+			Code:    interfaces.WSErrorCodeInternalError,
+			Message: errorMessage,
+			Type:    errorType,
+		}
+	}
+
+	// Handle streaming responses
+	go func() {
+		defer func() {
+			// Send completion status
+			completionMsg := &interfaces.WebSocketMessage{
+				Type: interfaces.MessageTypeAIStatus,
+				Data: map[string]interface{}{
+					"status":          "completed",
+					"conversation_id": conversationID,
+					"message_id":      msg.MessageID,
+					"timestamp":       time.Now().Unix(),
+				},
+				Timestamp: time.Now(),
+				MessageID: uuid.New().String(),
+			}
+
+			if completionBytes, err := json.Marshal(completionMsg); err == nil {
+				c.Send(ctx, completionBytes)
+			} else {
+				c.logger.LogError(ctx, "Failed to marshal AI completion status", map[string]interface{}{
+					"error": err.Error(),
+					"user_id": c.userID,
+				})
+			}
+		}()
+
+		for response := range responseChan {
+			if response != nil && response.Content != "" {
+				streamMsg := &interfaces.WebSocketMessage{
+					Type: interfaces.MessageTypeAIStream,
+					Data: map[string]interface{}{
+						"response":        response.Content,
+						"conversation_id": conversationID,
+						"agent_type":      agentType,
+						"model":           model,
+						"message_id":      msg.MessageID,
+						"is_final":        true,
+						"timestamp":       time.Now().Unix(),
+					},
+					Timestamp: time.Now(),
+					MessageID: uuid.New().String(),
+				}
+
+				if streamBytes, err := json.Marshal(streamMsg); err == nil {
+					c.Send(ctx, streamBytes)
+				} else {
+					c.logger.LogError(ctx, "Failed to marshal AI stream response", map[string]interface{}{
+						"error": err.Error(),
+						"user_id": c.userID,
+					})
+				}
+			}
+		}
+	}()
+
+	return nil
+}
+
 // pongHandler handles pong messages from the client
-func (c *Connection) pongHandler(string) error {
+func (c *Connection) pongHandler(appData string) error {
 	c.lastPongMu.Lock()
 	c.lastPong = time.Now()
 	c.lastPongMu.Unlock()

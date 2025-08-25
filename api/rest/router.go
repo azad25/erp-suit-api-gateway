@@ -39,10 +39,32 @@ func SetupAuthRoutes(router *gin.Engine, config *RouterConfig) {
 	}
 }
 
+// SetupAIRoutes sets up AI Copilot related routes
+func SetupAIRoutes(router *gin.Engine, config *RouterConfig) {
+	// Create AI handler
+	aiHandler := NewAIHandler(config.GRPCClient)
+
+	// Create AI route group
+	aiGroup := router.Group("/ai")
+	{
+		// Chat with AI (single response)
+		aiGroup.POST("/chat", aiHandler.Chat)
+		
+		// Chat with AI (streaming response)
+		aiGroup.POST("/chat/stream", aiHandler.StreamChat)
+		
+		// Health check
+		aiGroup.GET("/health", aiHandler.HealthCheck)
+	}
+}
+
 // SetupAllRoutes sets up all REST API routes
 func SetupAllRoutes(router *gin.Engine, config *RouterConfig) {
 	// Setup authentication routes
 	SetupAuthRoutes(router, config)
+	
+	// Setup AI routes
+	SetupAIRoutes(router, config)
 
 	// Add other route groups here as they are implemented
 	// e.g., SetupCRMRoutes(router, config)

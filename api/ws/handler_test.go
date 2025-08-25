@@ -133,7 +133,7 @@ func TestNewHandler(t *testing.T) {
 	mockLogger.On("LogWarning", mock.Anything, mock.Anything, mock.Anything).Maybe()
 	mockLogger.On("LogError", mock.Anything, mock.Anything, mock.Anything).Maybe()
 	
-	handler := NewHandler(cfg, mockRedis, mockLogger, mockJWT)
+	handler := NewHandler(cfg, mockRedis, mockLogger, mockJWT, nil)
 	
 	assert.NotNil(t, handler)
 	assert.NotNil(t, handler.manager)
@@ -159,7 +159,7 @@ func TestHandler_AuthenticateConnection(t *testing.T) {
 	mockLogger.On("LogWarning", mock.Anything, mock.Anything, mock.Anything).Maybe()
 	mockLogger.On("LogError", mock.Anything, mock.Anything, mock.Anything).Maybe()
 	
-	handler := NewHandler(cfg, mockRedis, mockLogger, mockJWT)
+	handler := NewHandler(cfg, mockRedis, mockLogger, mockJWT, nil)
 	defer handler.Close()
 	
 	tests := []struct {
@@ -254,7 +254,7 @@ func TestHandler_PublishNotification(t *testing.T) {
 	mockLogger.On("LogWarning", mock.Anything, mock.Anything, mock.Anything).Maybe()
 	mockLogger.On("LogError", mock.Anything, mock.Anything, mock.Anything).Maybe()
 	
-	handler := NewHandler(cfg, mockRedis, mockLogger, mockJWT)
+	handler := NewHandler(cfg, mockRedis, mockLogger, mockJWT, nil)
 	defer handler.Close()
 	
 	ctx := context.Background()
@@ -294,7 +294,7 @@ func TestHandler_HandleRedisMessage(t *testing.T) {
 	mockLogger.On("LogWarning", mock.Anything, mock.Anything, mock.Anything).Maybe()
 	mockLogger.On("LogError", mock.Anything, mock.Anything, mock.Anything).Maybe()
 	
-	handler := NewHandler(cfg, mockRedis, mockLogger, mockJWT)
+	handler := NewHandler(cfg, mockRedis, mockLogger, mockJWT, nil)
 	defer handler.Close()
 	
 	// Test user notification message
@@ -342,7 +342,7 @@ func TestHandler_WebSocketIntegration(t *testing.T) {
 		Email:  "test@example.com",
 	}, nil)
 	
-	handler := NewHandler(cfg, mockRedis, mockLogger, mockJWT)
+	handler := NewHandler(cfg, mockRedis, mockLogger, mockJWT, nil)
 	defer handler.Close()
 	
 	// Create test server

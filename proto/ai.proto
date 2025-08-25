@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package ai;
+
+option go_package = "erp-api-gateway/proto/gen/ai";
+
+// AI Copilot Service definition - matches erp-ai-copilot service
+service AICopilotService {
+  // Chat endpoint for processing messages
+  rpc Chat(ChatRequest) returns (ChatResponse) {}
+  
+  // Stream chat for real-time responses
+  rpc StreamChat(ChatRequest) returns (stream ChatResponse) {}
+  
+  // Health check endpoint
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {}
+}
+
+// Chat request message
+message ChatRequest {
+  // The message content from the user
+  string message = 1;
+  
+  // Optional conversation ID for continuing existing conversations
+  string conversation_id = 2;
+  
+  // User ID for authentication and personalization
+  string user_id = 3;
+  
+  // Type of agent to handle the request (query, action, analytics, etc.)
+  string agent_type = 4;
+  
+  // Optional model to use for processing
+  string model = 5;
+  
+  // Optional temperature parameter for model
+  float temperature = 6;
+  
+  // Optional max tokens parameter for model
+  int32 max_tokens = 7;
+  
+  // Optional context information as JSON string
+  string context = 8;
+}
+
+// Chat response message
+message ChatResponse {
+  // The response content from the AI
+  string content = 1;
+  
+  // Conversation ID for tracking
+  string conversation_id = 2;
+  
+  // Message ID for this specific response
+  string message_id = 3;
+  
+  // Type of response (text, error, etc.)
+  string response_type = 4;
+  
+  // Timestamp of the response
+  int64 timestamp = 5;
+  
+  // Optional metadata as JSON string
+  string metadata = 6;
+  
+  // Optional error message if something went wrong
+  string error = 7;
+  
+  // Optional suggested actions as JSON string
+  string suggested_actions = 8;
+}
+
+// Health check request
+message HealthCheckRequest {
+  // Optional check type (basic, full, etc.)
+  string check_type = 1;
+}
+
+// Health check response
+message HealthCheckResponse {
+  // Status of the service (ok, degraded, error)
+  string status = 1;
+  
+  // Optional details about the health check
+  string details = 2;
+  
+  // Optional version information
+  string version = 3;
+  
+  // Optional timestamp of the check
+  int64 timestamp = 4;
+}

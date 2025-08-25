@@ -40,6 +40,17 @@ lint:
 # Install development tools
 install-tools:
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+# Generate protobuf files
+proto:
+	@echo "🔧 Generating protobuf files..."
+	@mkdir -p proto/gen/ai
+	protoc --go_out=proto/gen/ai --go_opt=paths=source_relative \
+		--go-grpc_out=proto/gen/ai --go-grpc_opt=paths=source_relative \
+		proto/ai.proto
+	@echo "✅ AI protobuf files generated"
 
 # Run the server with hot reload (requires air)
 dev:

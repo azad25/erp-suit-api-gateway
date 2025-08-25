@@ -17,6 +17,7 @@ import (
 	crmpb "erp-api-gateway/proto/gen/crm"
 	hrmpb "erp-api-gateway/proto/gen/hrm"
 	financepb "erp-api-gateway/proto/gen/finance"
+	aipb "erp-api-gateway/proto/gen/ai/proto"
 )
 
 // GRPCClient manages connections and communication with backend gRPC services
@@ -123,6 +124,8 @@ func (s *StaticServiceDiscovery) GetServiceAddress(serviceName string) (string, 
 		return s.Endpoints.HRMService, nil
 	case "finance":
 		return s.Endpoints.FinanceService, nil
+	case "ai_copilot":
+		return s.Endpoints.AICopilotService, nil
 	default:
 		return "", fmt.Errorf("unknown service: %s", serviceName)
 	}
@@ -146,6 +149,7 @@ func (c *GRPCClient) watchServices() {
 		{"crm", c.config.CRMServiceAddress},
 		{"hrm", c.config.HRMServiceAddress},
 		{"finance", c.config.FinanceServiceAddress},
+		{"ai_copilot", c.config.AICopilotServiceAddress},
 	}
 
 	for _, svc := range services {
@@ -270,7 +274,7 @@ func (c *GRPCClient) getCircuitBreaker(serviceName string) *circuitbreaker.Circu
 
 // initializeCircuitBreakers initializes circuit breakers for all services
 func (c *GRPCClient) initializeCircuitBreakers() {
-	services := []string{"auth", "crm", "hrm", "finance"}
+	services := []string{"auth", "crm", "hrm", "finance", "ai_copilot"}
 	for _, service := range services {
 		c.getCircuitBreaker(service)
 	}
@@ -324,6 +328,7 @@ func (c *GRPCClient) HealthCheck(ctx context.Context) map[string]bool {
 		{"crm", c.config.CRMServiceAddress},
 		{"hrm", c.config.HRMServiceAddress},
 		{"finance", c.config.FinanceServiceAddress},
+		{"ai_copilot", c.config.AICopilotServiceAddress},
 	}
 	
 	for _, svc := range services {
@@ -369,6 +374,15 @@ func (c *GRPCClient) GetMetrics() *Metrics {
 // GetConnectionStats returns connection statistics
 func (c *GRPCClient) GetConnectionStats() map[string]ConnectionStats {
 	return c.connManager.GetConnectionStats()
+}
+
+// AICopilotService returns an AI Copilot service client
+func (c *GRPCClient) AICopilotService(ctx context.Context) (aipb.AICopilotServiceClient, error) {
+	conn, err := c.getServiceConnection(ctx, "ai_copilot", c.config.AICopilotServiceAddress)
+	if err != nil {
+		return nil, err
+	}
+	return aipb.NewAICopilotServiceClient(conn), nil
 }
 
 // GetServiceDiscovery returns the service discovery instance

@@ -87,10 +87,12 @@ type GRPCConfig struct {
 	CRMService                ServiceConfig `yaml:"crm_service"`
 	HRMService                ServiceConfig `yaml:"hrm_service"`
 	FinanceService            ServiceConfig `yaml:"finance_service"`
+	AICopilotService          ServiceConfig `yaml:"ai_copilot_service"`
 	AuthServiceAddress        string        `yaml:"auth_service_address"`
 	CRMServiceAddress         string        `yaml:"crm_service_address"`
 	HRMServiceAddress         string        `yaml:"hrm_service_address"`
 	FinanceServiceAddress     string        `yaml:"finance_service_address"`
+	AICopilotServiceAddress   string        `yaml:"ai_copilot_service_address"`
 	ServiceKey                string        `yaml:"service_key" env:"GRPC_SERVICE_KEY"`
 	ConsulAddress             string        `yaml:"consul_address"`
 	MaxRetries                int           `yaml:"max_retries"`
@@ -299,12 +301,14 @@ func setDefaults(cfg *Config) {
 	setServiceDefaults(&cfg.GRPC.CRMService, "localhost", 50052)
 	setServiceDefaults(&cfg.GRPC.HRMService, "localhost", 50053)
 	setServiceDefaults(&cfg.GRPC.FinanceService, "localhost", 50054)
+	setServiceDefaults(&cfg.GRPC.AICopilotService, "localhost", 50055)
 
 	// Set service address strings for backward compatibility
 	cfg.GRPC.AuthServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.AuthService.Host, cfg.GRPC.AuthService.Port)
 	cfg.GRPC.CRMServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.CRMService.Host, cfg.GRPC.CRMService.Port)
 	cfg.GRPC.HRMServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.HRMService.Host, cfg.GRPC.HRMService.Port)
 	cfg.GRPC.FinanceServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.FinanceService.Host, cfg.GRPC.FinanceService.Port)
+	cfg.GRPC.AICopilotServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.AICopilotService.Host, cfg.GRPC.AICopilotService.Port)
 
 	// Set default service key for internal service authentication
 	cfg.GRPC.ServiceKey = "internal-service-key"
@@ -356,6 +360,7 @@ func syncServiceAddresses(cfg *Config) {
 	cfg.GRPC.CRMServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.CRMService.Host, cfg.GRPC.CRMService.Port)
 	cfg.GRPC.HRMServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.HRMService.Host, cfg.GRPC.HRMService.Port)
 	cfg.GRPC.FinanceServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.FinanceService.Host, cfg.GRPC.FinanceService.Port)
+	cfg.GRPC.AICopilotServiceAddress = fmt.Sprintf("%s:%d", cfg.GRPC.AICopilotService.Host, cfg.GRPC.AICopilotService.Port)
 }
 
 // loadFromFile loads configuration from YAML or JSON file
@@ -658,6 +663,10 @@ func validateGRPC(cfg *GRPCConfig) error {
 		return err
 	}
 
+	if err := validateService("ai_copilot_service", &cfg.AICopilotService); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -854,6 +863,8 @@ func (cfg *Config) GetServiceAddr(serviceName string) string {
 		svc = &cfg.GRPC.HRMService
 	case "finance":
 		svc = &cfg.GRPC.FinanceService
+	case "ai_copilot":
+		svc = &cfg.GRPC.AICopilotService
 	default:
 		return ""
 	}
@@ -895,6 +906,8 @@ func (c *GRPCConfig) SetServiceAddress(serviceName, address string) {
 		c.HRMServiceAddress = address
 	case "finance":
 		c.FinanceServiceAddress = address
+	case "ai_copilot":
+		c.AICopilotServiceAddress = address
 	}
 }
 
@@ -952,6 +965,31 @@ func loadGRPCServiceEnvVars(cfg *Config) {
 	if port := os.Getenv("GRPC_FINANCE_SERVICE_PORT"); port != "" {
 		if p, err := strconv.Atoi(port); err == nil {
 			cfg.GRPC.FinanceService.Port = p
+		}
+	}
+
+	// AI Copilot Service
+	if host := os.Getenv("GRPC_AI_COPILOT_SERVICE_HOST"); host != "" {
+		cfg.GRPC.AICopilotService.Host = host
+	}
+	if port := os.Getenv("GRPC_AI_COPILOT_SERVICE_PORT"); port != "" {
+		if p, err := strconv.Atoi(port); err == nil {
+			cfg.GRPC.AICopilotService.Port = p
+		}
+	}
+	if timeout := os.Getenv("GRPC_AI_COPILOT_SERVICE_TIMEOUT"); timeout != "" {
+		if t, err := time.ParseDuration(timeout); err == nil {
+			cfg.GRPC.AICopilotService.Timeout = t
+		}
+	}
+	if retries := os.Getenv("GRPC_AI_COPILOT_SERVICE_MAX_RETRIES"); retries != "" {
+		if r, err := strconv.Atoi(retries); err == nil {
+			cfg.GRPC.AICopilotService.MaxRetries = r
+		}
+	}
+	if backoff := os.Getenv("GRPC_AI_COPILOT_SERVICE_RETRY_BACKOFF"); backoff != "" {
+		if b, err := time.ParseDuration(backoff); err == nil {
+			cfg.GRPC.AICopilotService.RetryBackoff = b
 		}
 	}
 
