@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 
 	"erp-api-gateway/internal/config"
 	"erp-api-gateway/internal/interfaces"
@@ -19,16 +19,16 @@ import (
 
 // Handler handles WebSocket connections and real-time messaging
 type Handler struct {
-	upgrader        websocket.Upgrader
-	manager         interfaces.ConnectionManager
-	redisClient     interfaces.PubSubService
-	logger          interfaces.SimpleLogger
-	jwtValidator    interfaces.JWTValidator
-	config          *config.WebSocketConfig
-	subscription    interfaces.PubSubSubscription
-	grpcClient      *grpc_client.GRPCClient
-	ctx             context.Context
-	cancel          context.CancelFunc
+	upgrader     websocket.Upgrader
+	manager      interfaces.ConnectionManager
+	redisClient  interfaces.PubSubService
+	logger       interfaces.SimpleLogger
+	jwtValidator interfaces.JWTValidator
+	config       *config.WebSocketConfig
+	subscription interfaces.PubSubSubscription
+	grpcClient   *grpc_client.GRPCClient
+	ctx          context.Context
+	cancel       context.CancelFunc
 }
 
 // NewHandler creates a new WebSocket handler
@@ -49,7 +49,7 @@ func NewHandler(
 			if origin == "" {
 				return true // Allow requests without Origin header
 			}
-			
+
 			for _, allowedOrigin := range cfg.AllowedOrigins {
 				if origin == allowedOrigin {
 					return true
@@ -59,13 +59,13 @@ func NewHandler(
 		},
 		EnableCompression: cfg.EnableCompression,
 	}
-	
+
 	// Create connection manager
 	manager := NewManager(logger, cfg.MaxConnections)
-	
+
 	// Create context for the handler
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	h := &Handler{
 		upgrader:     upgrader,
 		manager:      manager,
@@ -77,10 +77,10 @@ func NewHandler(
 		ctx:          ctx,
 		cancel:       cancel,
 	}
-	
+
 	// Start Redis Pub/Sub listener
 	go h.startRedisPubSubListener()
-	
+
 	return h
 }
 
@@ -94,11 +94,11 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) error
 			"user_agent":  r.UserAgent(),
 			"error":       err.Error(),
 		})
-		
+
 		http.Error(w, "Authentication failed", http.StatusUnauthorized)
 		return err
 	}
-	
+
 	// Upgrade HTTP connection to WebSocket
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -109,7 +109,7 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) error
 		})
 		return err
 	}
-	
+
 	// Create connection config
 	connConfig := ConnectionConfig{
 		ReadTimeout:    h.config.ReadTimeout,
@@ -118,10 +118,10 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) error
 		PingPeriod:     h.config.PingPeriod,
 		MaxMessageSize: h.config.MaxMessageSize,
 	}
-	
+
 	// Create WebSocket connection wrapper
 	wsConn := NewConnection(conn, userID, h.manager, h.logger, connConfig)
-	
+
 	// Add connection to manager
 	if err := h.manager.AddConnection(wsConn); err != nil {
 		h.logger.LogError(r.Context(), "Failed to add WebSocket connection", map[string]interface{}{
@@ -129,21 +129,21 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) error
 			"connection_id": wsConn.GetID(),
 			"error":         err.Error(),
 		})
-		
+
 		wsConn.Close()
 		return err
 	}
-	
+
 	h.logger.LogInfo(r.Context(), "WebSocket connection established", map[string]interface{}{
 		"user_id":       userID,
 		"connection_id": wsConn.GetID(),
 		"remote_addr":   r.RemoteAddr,
 		"user_agent":    r.UserAgent(),
 	})
-	
+
 	// Start connection pumps
 	wsConn.Start(h.ctx)
-	
+
 	return nil
 }
 
@@ -162,89 +162,90 @@ func (h *Handler) GetConnectionCount() int {
 	return h.manager.GetConnectionCount()
 }
 
-// ProcessAIChat processes an AI chat request via WebSocket
+// ProcessAIChat processes an AI chat request via WebSocket using gRPC
 func (h *Handler) ProcessAIChat(ctx context.Context, userID string, message string, conversationID string, agentType string, model string) (*aipb.ChatResponse, error) {
-	if h.grpcClient == nil {
-		return nil, fmt.Errorf("gRPC client not initialized")
-	}
-
-	client, err := h.grpcClient.AICopilotService(ctx)
+	// Get AI Copilot gRPC client
+	aiClient, err := h.grpcClient.AICopilotService(ctx)
 	if err != nil {
-		h.logger.LogError(ctx, "Failed to get AI Copilot service client", map[string]interface{}{
+		h.logger.LogError(ctx, "Failed to get AI Copilot gRPC client", map[string]interface{}{
 			"user_id": userID,
 			"error":   err.Error(),
 		})
-		return nil, fmt.Errorf("failed to get AI service client: %w", err)
+		return nil, fmt.Errorf("failed to get AI Copilot gRPC client: %w", err)
 	}
 
-	request := &aipb.ChatRequest{
+	// Create gRPC request
+	req := &aipb.ChatRequest{
 		Message:        message,
 		UserId:         userID,
 		ConversationId: conversationID,
 		AgentType:      agentType,
 		Model:          model,
+		Temperature:    0.7,
+		MaxTokens:      1000,
 	}
 
-	response, err := client.Chat(ctx, request)
+	// Make gRPC call to AI service
+	resp, err := aiClient.Chat(ctx, req)
 	if err != nil {
-		h.logger.LogError(ctx, "AI chat request failed", map[string]interface{}{
+		h.logger.LogError(ctx, "Failed to call AI Copilot gRPC service", map[string]interface{}{
 			"user_id": userID,
 			"error":   err.Error(),
 		})
-		return nil, fmt.Errorf("AI chat request failed: %w", err)
+		return nil, fmt.Errorf("failed to call AI Copilot gRPC service: %w", err)
 	}
 
-	return response, nil
+	return resp, nil
 }
 
-// ProcessAIChatStream processes a streaming AI chat request via WebSocket
+// ProcessAIChatStream processes a streaming AI chat request via WebSocket using gRPC
 func (h *Handler) ProcessAIChatStream(ctx context.Context, userID string, message string, conversationID string, agentType string, model string) (<-chan *aipb.ChatResponse, error) {
-	if h.grpcClient == nil {
-		return nil, fmt.Errorf("gRPC client not initialized")
-	}
-
-	client, err := h.grpcClient.AICopilotService(ctx)
+	// Get AI Copilot gRPC client
+	aiClient, err := h.grpcClient.AICopilotService(ctx)
 	if err != nil {
-		h.logger.LogError(ctx, "Failed to get AI Copilot service client", map[string]interface{}{
+		h.logger.LogError(ctx, "Failed to get AI Copilot gRPC client", map[string]interface{}{
 			"user_id": userID,
 			"error":   err.Error(),
 		})
-		return nil, fmt.Errorf("failed to get AI service client: %w", err)
+		return nil, fmt.Errorf("failed to get AI Copilot gRPC client: %w", err)
 	}
 
-	request := &aipb.ChatRequest{
+	// Create gRPC request
+	req := &aipb.ChatRequest{
 		Message:        message,
 		UserId:         userID,
 		ConversationId: conversationID,
 		AgentType:      agentType,
 		Model:          model,
+		Temperature:    0.7,
+		MaxTokens:      1000,
 	}
 
-	stream, err := client.StreamChat(ctx, request)
-	if err != nil {
-		h.logger.LogError(ctx, "AI chat stream request failed", map[string]interface{}{
-			"user_id": userID,
-			"error":   err.Error(),
-		})
-		return nil, fmt.Errorf("AI chat stream request failed: %w", err)
-	}
-
+	// Create response channel
 	responseChan := make(chan *aipb.ChatResponse, 10)
 
+	// Start streaming gRPC call
 	go func() {
 		defer close(responseChan)
+
+		// Call the streaming gRPC method
+		stream, err := aiClient.StreamChat(ctx, req)
+		if err != nil {
+			h.logger.LogError(ctx, "Failed to start streaming gRPC call", map[string]interface{}{
+				"user_id": userID,
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		// Receive streaming responses
 		for {
-			response, err := stream.Recv()
+			resp, err := stream.Recv()
 			if err != nil {
-				if err.Error() != "EOF" {
-					h.logger.LogError(ctx, "Error receiving AI stream response", map[string]interface{}{
-						"user_id": userID,
-						"error":   err.Error(),
-					})
-				}
-				return
+				// End of stream or error
+				break
 			}
-			responseChan <- response
+			responseChan <- resp
 		}
 	}()
 
@@ -260,7 +261,7 @@ func (h *Handler) GetHandler() *Handler {
 func (h *Handler) Close() error {
 	// Cancel context to stop all goroutines
 	h.cancel()
-	
+
 	// Close Redis subscription
 	if h.subscription != nil {
 		if err := h.subscription.Close(); err != nil {
@@ -269,7 +270,7 @@ func (h *Handler) Close() error {
 			})
 		}
 	}
-	
+
 	// Close connection manager
 	if err := h.manager.Close(); err != nil {
 		h.logger.LogError(context.Background(), "Failed to close connection manager", map[string]interface{}{
@@ -277,7 +278,7 @@ func (h *Handler) Close() error {
 		})
 		return err
 	}
-	
+
 	h.logger.LogInfo(context.Background(), "WebSocket handler closed", nil)
 	return nil
 }
@@ -286,14 +287,14 @@ func (h *Handler) Close() error {
 func (h *Handler) authenticateConnection(r *http.Request) (string, error) {
 	// Try to get token from query parameter first (for WebSocket connections)
 	token := r.URL.Query().Get("token")
-	
+
 	// If not in query, try Authorization header
 	if token == "" {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			return "", fmt.Errorf("missing authentication token")
 		}
-		
+
 		// Extract token from "Bearer <token>" format
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
@@ -301,21 +302,21 @@ func (h *Handler) authenticateConnection(r *http.Request) (string, error) {
 		}
 		token = parts[1]
 	}
-	
+
 	if token == "" {
 		return "", fmt.Errorf("empty authentication token")
 	}
-	
+
 	// Validate JWT token
 	claims, err := h.jwtValidator.ValidateToken(token)
 	if err != nil {
 		return "", fmt.Errorf("invalid token: %w", err)
 	}
-	
+
 	if claims.UserID == "" {
 		return "", fmt.Errorf("missing user ID in token claims")
 	}
-	
+
 	return claims.UserID, nil
 }
 
@@ -327,7 +328,7 @@ func (h *Handler) startRedisPubSubListener() {
 		"events:*",         // Event notifications
 		"system:broadcast", // System-wide broadcasts
 	}
-	
+
 	subscription, err := h.redisClient.Subscribe(h.ctx, channels...)
 	if err != nil {
 		h.logger.LogError(h.ctx, "Failed to subscribe to Redis channels", map[string]interface{}{
@@ -336,13 +337,13 @@ func (h *Handler) startRedisPubSubListener() {
 		})
 		return
 	}
-	
+
 	h.subscription = subscription
-	
+
 	h.logger.LogInfo(h.ctx, "Started Redis Pub/Sub listener", map[string]interface{}{
 		"channels": channels,
 	})
-	
+
 	// Process incoming messages
 	for {
 		select {
@@ -353,7 +354,7 @@ func (h *Handler) startRedisPubSubListener() {
 				h.logger.LogWarning(h.ctx, "Redis Pub/Sub channel closed", nil)
 				return
 			}
-			
+
 			if err := h.handleRedisMessage(msg); err != nil {
 				h.logger.LogError(h.ctx, "Failed to handle Redis message", map[string]interface{}{
 					"channel": msg.Channel,
@@ -371,23 +372,23 @@ func (h *Handler) handleRedisMessage(msg *interfaces.Message) error {
 	if err := json.Unmarshal([]byte(msg.Payload), &wsMessage); err != nil {
 		return fmt.Errorf("failed to unmarshal message: %w", err)
 	}
-	
+
 	// Set message ID if not present
 	if wsMessage.MessageID == "" {
 		wsMessage.MessageID = uuid.New().String()
 	}
-	
+
 	// Set timestamp if not present
 	if wsMessage.Timestamp.IsZero() {
 		wsMessage.Timestamp = time.Now()
 	}
-	
+
 	// Serialize message for WebSocket transmission
 	messageBytes, err := json.Marshal(wsMessage)
 	if err != nil {
 		return fmt.Errorf("failed to marshal WebSocket message: %w", err)
 	}
-	
+
 	// Determine how to route the message based on channel
 	if strings.HasPrefix(msg.Channel, "notifications:") {
 		// User-specific notification
@@ -402,11 +403,11 @@ func (h *Handler) handleRedisMessage(msg *interfaces.Message) error {
 		// System-wide broadcast - send to all connections
 		return h.broadcastToAll(messageBytes)
 	}
-	
+
 	h.logger.LogWarning(h.ctx, "Unknown Redis channel pattern", map[string]interface{}{
 		"channel": msg.Channel,
 	})
-	
+
 	return nil
 }
 
@@ -415,11 +416,11 @@ func (h *Handler) broadcastToAll(message []byte) error {
 	// Get all connections and broadcast
 	// This is a simplified implementation - in production, you might want to batch this
 	connectionCount := h.manager.GetConnectionCount()
-	
+
 	h.logger.LogInfo(h.ctx, "Broadcasting to all connections", map[string]interface{}{
 		"total_connections": connectionCount,
 	})
-	
+
 	// For now, we'll use the system:broadcast channel
 	return h.BroadcastToChannel(h.ctx, "system:broadcast", message)
 }
@@ -434,7 +435,7 @@ func (h *Handler) PublishNotification(ctx context.Context, userID string, notifi
 		UserID:    userID,
 		MessageID: uuid.New().String(),
 	}
-	
+
 	// Publish to Redis channel
 	channel := fmt.Sprintf("notifications:%s", userID)
 	return h.redisClient.Publish(ctx, channel, wsMessage)
@@ -450,7 +451,7 @@ func (h *Handler) PublishEvent(ctx context.Context, eventType string, eventData 
 		Timestamp: time.Now(),
 		MessageID: uuid.New().String(),
 	}
-	
+
 	// Publish to Redis channel
 	channel := fmt.Sprintf("events:%s", eventType)
 	return h.redisClient.Publish(ctx, channel, wsMessage)
@@ -466,7 +467,7 @@ func (h *Handler) PublishSystemBroadcast(ctx context.Context, message map[string
 		Timestamp: time.Now(),
 		MessageID: uuid.New().String(),
 	}
-	
+
 	// Publish to Redis channel
 	return h.redisClient.Publish(ctx, "system:broadcast", wsMessage)
 }

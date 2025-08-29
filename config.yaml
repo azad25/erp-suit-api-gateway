@@ -50,19 +50,30 @@ redis:
 
 kafka:
   brokers:
-    - "kafka:29092"
+    - "localhost:9092"
   client_id: "go-api-gateway"
   retry_max: 3
   retry_backoff: "100ms"
   flush_messages: 100
   flush_bytes: 1048576  # 1MB
   flush_timeout: "1s"
+  enabled: true
 
 grpc:
   auth_service:
     host: "auth-service"
     port: 50051
     timeout: "10s"
+    max_retries: 3
+    retry_backoff: "100ms"
+    circuit_breaker:
+      max_failures: 5
+      timeout: "60s"
+      interval: "10s"
+  ai_copilot_service:
+    host: "ai-copilot"
+    port: 50051
+    timeout: "30s"
     max_retries: 3
     retry_backoff: "100ms"
     circuit_breaker:
@@ -78,9 +89,11 @@ graphql:
 
 # WebSocket Configuration (Local Handler)
 websocket:
+  server_host: "0.0.0.0"
+  server_port: 8001
+  endpoint: "/ws"
   enable_cors: true
   timeout: "30s"
-  # Detailed WebSocket configuration
   read_buffer_size: 4096
   write_buffer_size: 4096
   handshake_timeout: "10s"
@@ -95,6 +108,8 @@ websocket:
     - "http://127.0.0.1:3000"
     - "http://localhost"
     - "http://erp-frontend:3000"
+  enable_compression: false
+  compression_level: 0
 
 # Health Check Optimization
 health:

@@ -253,6 +253,15 @@ func (s *Server) setupRoutes() {
 	// WebSocket endpoints - using local handler
 	s.router.GET("/ws", s.optionalAuth(), s.handleWebSocket)
 
+	// AI WebSocket proxy endpoint
+	if wsProxyHandler, err := rest.NewAIWSProxyHandler("http://ai-copilot:8003"); err == nil {
+		s.router.GET("/ws/chat", s.optionalAuth(), wsProxyHandler.Proxy)
+	} else {
+		logger.LogError(context.Background(), "Failed to create AI WebSocket proxy handler", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
 	// GraphQL endpoints
 	s.setupGraphQLRoutes()
 
@@ -314,18 +323,8 @@ func (s *Server) setupRESTRoutes() {
 			authV1.GET("/me", s.requireAuth(), s.getRESTAuthHandler(routerConfig).GetCurrentUser)
 		}
 
-		// AI Copilot routes
-		aiV1 := v1.Group("/ai")
-		{
-			// Chat with AI (single response)
-			aiV1.POST("/chat", s.getRESTAIHandler(routerConfig).Chat)
-			
-			// Chat with AI (streaming response)
-			aiV1.POST("/chat/stream", s.getRESTAIHandler(routerConfig).StreamChat)
-			
-			// Health check
-			aiV1.GET("/health", s.getRESTAIHandler(routerConfig).HealthCheck)
-		}
+		// AI Copilot routes - use consolidated router setup
+		rest.SetupAIRoutes(v1, routerConfig)
 
 		// Future API routes will be added here
 		// e.g., CRM, HRM, Finance routes
@@ -342,9 +341,9 @@ func (s *Server) getRESTAuthHandler(config *rest.RouterConfig) *rest.AuthHandler
 	)
 }
 
-// getRESTAIHandler creates and returns a REST AI handler
-func (s *Server) getRESTAIHandler(config *rest.RouterConfig) *rest.AIHandler {
-	return rest.NewAIHandler(config.GRPCClient)
+// getRESTAIHandler creates and returns a REST AI proxy handler
+func (s *Server) getRESTAIHandler(config *rest.RouterConfig) *rest.AIProxyHandler {
+	return rest.NewAIProxyHandler("http://ai-copilot:8003")
 }
 
 // Middleware helper functions

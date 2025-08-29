@@ -1,9 +1,10 @@
 package rest
 
 import (
-	"github.com/gin-gonic/gin"
 	"erp-api-gateway/internal/interfaces"
 	"erp-api-gateway/internal/services/grpc_client"
+
+	"github.com/gin-gonic/gin"
 )
 
 // RouterConfig holds the configuration for setting up REST API routes
@@ -40,21 +41,26 @@ func SetupAuthRoutes(router *gin.Engine, config *RouterConfig) {
 }
 
 // SetupAIRoutes sets up AI Copilot related routes
-func SetupAIRoutes(router *gin.Engine, config *RouterConfig) {
-	// Create AI handler
-	aiHandler := NewAIHandler(config.GRPCClient)
+func SetupAIRoutes(router gin.IRouter, config *RouterConfig) {
+	// Create AI proxy handler (communicates with AI service via HTTP)
+	aiProxyHandler := NewAIProxyHandler("http://ai-copilot:8003")
+
+	// Note: WebSocket proxy route should be registered at root level, not here
 
 	// Create AI route group
 	aiGroup := router.Group("/ai")
 	{
 		// Chat with AI (single response)
-		aiGroup.POST("/chat", aiHandler.Chat)
-		
+		aiGroup.POST("/chat", aiProxyHandler.Chat)
+
 		// Chat with AI (streaming response)
-		aiGroup.POST("/chat/stream", aiHandler.StreamChat)
-		
+		aiGroup.POST("/chat/stream", aiProxyHandler.StreamChat)
+
 		// Health check
-		aiGroup.GET("/health", aiHandler.HealthCheck)
+		aiGroup.GET("/health", aiProxyHandler.HealthCheck)
+
+		// Models endpoint
+		aiGroup.GET("/models", aiProxyHandler.Models)
 	}
 }
 
@@ -62,7 +68,7 @@ func SetupAIRoutes(router *gin.Engine, config *RouterConfig) {
 func SetupAllRoutes(router *gin.Engine, config *RouterConfig) {
 	// Setup authentication routes
 	SetupAuthRoutes(router, config)
-	
+
 	// Setup AI routes
 	SetupAIRoutes(router, config)
 

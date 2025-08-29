@@ -37,15 +37,20 @@ func main() {
 
 	// Initialize Kafka producer (optional for testing)
 	var eventPublisher interfaces.EventPublisher
-	kafkaProducer, err := services.NewKafkaProducer(&cfg.Kafka)
-	if err != nil {
-		log.Printf("Warning: Failed to initialize Kafka producer: %v", err)
-		log.Println("Using no-op event publisher as fallback...")
-		eventPublisher = services.NewNoOpEventPublisher()
+	if cfg.Kafka.Enabled {
+		kafkaProducer, err := services.NewKafkaProducer(&cfg.Kafka)
+		if err != nil {
+			log.Printf("Warning: Failed to initialize Kafka producer: %v", err)
+			log.Println("Using no-op event publisher as fallback...")
+			eventPublisher = services.NewNoOpEventPublisher()
+		} else {
+			log.Println("Kafka producer initialized successfully")
+			eventPublisher = kafkaProducer
+			defer kafkaProducer.Close()
+		}
 	} else {
-		log.Println("Kafka producer initialized successfully")
-		eventPublisher = kafkaProducer
-		defer kafkaProducer.Close()
+		log.Println("Kafka is disabled, using no-op event publisher")
+		eventPublisher = services.NewNoOpEventPublisher()
 	}
 
 	// Initialize JWT validator
