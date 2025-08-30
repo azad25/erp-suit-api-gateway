@@ -86,6 +86,33 @@ func NewHandler(
 
 // HandleConnection handles WebSocket connection upgrades
 func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) error {
+	// Set CORS headers for WebSocket
+	headers := w.Header()
+	headers.Set("Access-Control-Allow-Origin", "*")
+	headers.Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	headers.Set("Access-Control-Allow-Headers", "Origin, Authorization, Content-Type")
+
+	// Handle preflight OPTIONS request
+	if r.Method == "OPTIONS" {
+		h.logger.LogInfo(r.Context(), "Handling WebSocket OPTIONS request", map[string]interface{}{
+			"remote_addr": r.RemoteAddr,
+			"user_agent":  r.UserAgent(),
+		})
+		w.WriteHeader(http.StatusOK)
+		return nil
+	}
+
+	// Check if this is a WebSocket upgrade request
+	if !websocket.IsWebSocketUpgrade(r) {
+		h.logger.LogError(r.Context(), "Not a WebSocket upgrade request", map[string]interface{}{
+			"method":      r.Method,
+			"remote_addr": r.RemoteAddr,
+			"user_agent":  r.UserAgent(),
+		})
+		http.Error(w, "Expected WebSocket upgrade request", http.StatusBadRequest)
+		return fmt.Errorf("expected WebSocket upgrade request")
+	}
+
 	// Authenticate the WebSocket connection
 	userID, err := h.authenticateConnection(r)
 	if err != nil {
@@ -96,7 +123,7 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) error
 		})
 
 		http.Error(w, "Authentication failed", http.StatusUnauthorized)
-		return err
+		return fmt.Errorf("authentication failed: %w", err)
 	}
 
 	// Upgrade HTTP connection to WebSocket
@@ -107,10 +134,10 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) error
 			"remote_addr": r.RemoteAddr,
 			"error":       err.Error(),
 		})
-		return err
+		return fmt.Errorf("WebSocket upgrade failed: %w", err)
 	}
 
-	// Create connection config
+	// Create connection config with timeouts
 	connConfig := ConnectionConfig{
 		ReadTimeout:    h.config.ReadTimeout,
 		WriteTimeout:   h.config.WriteTimeout,
@@ -130,8 +157,12 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) error
 			"error":         err.Error(),
 		})
 
-		wsConn.Close()
-		return err
+		// Try to send close message before closing
+		closeMsg := websocket.FormatCloseMessage(websocket.CloseGoingAway, "Server error")
+		_ = conn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(5*time.Second))
+		_ = conn.Close()
+		
+		return fmt.Errorf("failed to add connection: %w", err)
 	}
 
 	h.logger.LogInfo(r.Context(), "WebSocket connection established", map[string]interface{}{
@@ -141,8 +172,21 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) error
 		"user_agent":    r.UserAgent(),
 	})
 
-	// Start connection pumps
-	wsConn.Start(h.ctx)
+	// Start connection pumps in a separate goroutine
+	go func() {
+		defer func() {
+			// Ensure connection is properly closed on panic
+			if r := recover(); r != nil {
+				h.logger.LogError(context.Background(), "WebSocket connection panic", map[string]interface{}{
+					"user_id":       userID,
+					"connection_id": wsConn.GetID(),
+					"panic":         r,
+				})
+			}
+			wsConn.Close()
+		}()
+		wsConn.Start(h.ctx)
+	}()
 
 	return nil
 }
@@ -285,39 +329,94 @@ func (h *Handler) Close() error {
 
 // authenticateConnection authenticates a WebSocket connection using JWT token
 func (h *Handler) authenticateConnection(r *http.Request) (string, error) {
-	// Try to get token from query parameter first (for WebSocket connections)
+	// Log incoming request details
+	h.logger.LogInfo(r.Context(), "Authenticating WebSocket connection", map[string]interface{}{
+		"remote_addr": r.RemoteAddr,
+		"method":      r.Method,
+		"url":         r.URL.String(),
+	})
+
+	// Try to get token from query parameter first
 	token := r.URL.Query().Get("token")
+	tokenSource := "query parameter"
 
 	// If not in query, try Authorization header
 	if token == "" {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			return "", fmt.Errorf("missing authentication token")
+			err := fmt.Errorf("missing authentication token (neither token query parameter nor Authorization header provided)")
+			h.logger.LogError(r.Context(), "Authentication failed", map[string]interface{}{
+				"error": err.Error(),
+			})
+			return "", err
 		}
 
-		// Extract token from "Bearer <token>" format
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-			return "", fmt.Errorf("invalid authorization header format")
+			err := fmt.Errorf("invalid authorization header format (expected 'Bearer <token>', got '%s...')", safeSubstring(authHeader, 0, 20))
+			h.logger.LogError(r.Context(), "Authentication failed", map[string]interface{}{
+				"error": err.Error(),
+			})
+			return "", err
 		}
 		token = parts[1]
+		tokenSource = "authorization header"
 	}
 
 	if token == "" {
-		return "", fmt.Errorf("empty authentication token")
+		err := fmt.Errorf("empty authentication token")
+		h.logger.LogError(r.Context(), "Authentication failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return "", err
 	}
 
-	// Validate JWT token
+	h.logger.LogInfo(r.Context(), "Validating token", map[string]interface{}{
+		"token_source": tokenSource,
+		"token_prefix": safeSubstring(token, 0, 10) + "..." + safeSubstring(token, len(token)-10, len(token)),
+	})
+
+	// Validate the JWT token
 	claims, err := h.jwtValidator.ValidateToken(token)
 	if err != nil {
+		h.logger.LogError(r.Context(), "Token validation failed", map[string]interface{}{
+			"error":          err.Error(),
+			"token_source":   tokenSource,
+			"token_prefix":   safeSubstring(token, 0, 10) + "..." + safeSubstring(token, len(token)-10, len(token)),
+		})
 		return "", fmt.Errorf("invalid token: %w", err)
 	}
 
+	// Check if user ID is present in the claims
 	if claims.UserID == "" {
-		return "", fmt.Errorf("missing user ID in token claims")
+		err := fmt.Errorf("missing user ID in token claims")
+		h.logger.LogError(r.Context(), "Authentication failed", map[string]interface{}{
+			"error":  err.Error(),
+			"claims": claims,
+		})
+		return "", err
 	}
 
+	h.logger.LogInfo(r.Context(), "Successfully authenticated WebSocket connection", map[string]interface{}{
+		"user_id": claims.UserID,
+		"email":   claims.Email,
+	})
+
 	return claims.UserID, nil
+}
+
+// safeSubstring returns a substring of s from start to end, handling out of bounds
+func safeSubstring(s string, start, end int) string {
+	if start < 0 {
+		start = 0
+	}
+	if end > len(s) {
+		end = len(s)
+	}
+	if start >= end {
+		return ""
+	}
+	return s[start:end]
 }
 
 // startRedisPubSubListener starts listening to Redis Pub/Sub channels

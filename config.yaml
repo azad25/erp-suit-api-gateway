@@ -87,11 +87,11 @@ graphql:
   enable_introspection: true
   timeout: "30s"
 
-# WebSocket Configuration (Local Handler)
+# WebSocket Configuration (Proxies to AI Service)
 websocket:
-  server_host: "0.0.0.0"
-  server_port: 8001
-  endpoint: "/ws"
+  server_host: "localhost"   # Host where AI Copilot service is running
+  server_port: 8003          # AI Copilot service port
+  endpoint: "/ws"            # AI Copilot WebSocket endpoint (base path)
   enable_cors: true
   timeout: "30s"
   read_buffer_size: 4096

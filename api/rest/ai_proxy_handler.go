@@ -228,3 +228,58 @@ func (h *AIProxyHandler) Models(c *gin.Context) {
 	// Forward response status and body
 	c.Data(resp.StatusCode, "application/json", respBody)
 }
+
+// Query handles AI query requests by proxying to the AI service
+func (h *AIProxyHandler) Query(c *gin.Context) {
+	// Read the request body
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Failed to read request body",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Create request to AI service
+	req, err := http.NewRequest("POST", h.aiServiceURL+"/query", bytes.NewBuffer(body))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create request to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Copy headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "erp-api-gateway")
+	// Forward auth header if present
+	if auth := c.GetHeader("Authorization"); auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+
+	// Make request to AI service
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to connect to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to read AI service response",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Forward response status and body
+	c.Data(resp.StatusCode, "application/json", respBody)
+}

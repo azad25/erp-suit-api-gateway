@@ -61,6 +61,9 @@ func SetupAIRoutes(router gin.IRouter, config *RouterConfig) {
 
 		// Models endpoint
 		aiGroup.GET("/models", aiProxyHandler.Models)
+
+		// Query endpoint
+		aiGroup.POST("/query", aiProxyHandler.Query)
 	}
 }
 

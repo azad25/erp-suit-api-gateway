@@ -2,13 +2,14 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha1"
+	"encoding/base64"
 	"fmt"
+	"net/url"
 	"net/http"
+	"strings"
 	"time"
-
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
-	"golang.org/x/time/rate"
 
 	"erp-api-gateway/api/graphql"
 	"erp-api-gateway/api/rest"
@@ -20,6 +21,11 @@ import (
 	"erp-api-gateway/internal/services"
 	"erp-api-gateway/internal/services/grpc_client"
 	"erp-api-gateway/middleware"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+	"golang.org/x/time/rate"
 )
 
 // Server represents the HTTP server
@@ -201,7 +207,7 @@ func (s *Server) setupCORS() gin.HandlerFunc {
 	corsConfig := cors.Config{
 		AllowOrigins:     s.config.Server.CORS.AllowedOrigins,
 		AllowMethods:     s.config.Server.CORS.AllowedMethods,
-		AllowHeaders:     s.config.Server.CORS.AllowedHeaders,
+		AllowHeaders:     append(s.config.Server.CORS.AllowedHeaders, "Upgrade", "Connection", "Sec-WebSocket-Key", "Sec-WebSocket-Version", "Sec-WebSocket-Protocol"),
 		AllowCredentials: s.config.Server.CORS.AllowCredentials,
 		MaxAge:           time.Duration(s.config.Server.CORS.MaxAge) * time.Second,
 	}
@@ -242,31 +248,49 @@ func (s *Server) setupRequestTimeout() gin.HandlerFunc {
 
 // setupRoutes sets up the HTTP routes
 func (s *Server) setupRoutes() {
+	fmt.Printf("Setting up routes...\n")
+
 	// Health check endpoints (no authentication required)
 	s.router.GET("/health", s.healthCheck)
 	s.router.GET("/ready", s.readinessCheck)
 	s.router.GET("/health/detailed", s.detailedHealthCheck)
+	fmt.Printf("Health routes registered\n")
+
+	// Test route
+	s.router.GET("/test", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "Test route working"})
+	})
+	fmt.Printf("Test route registered: /test\n")
 
 	// Metrics endpoint (no authentication required)
 	s.router.GET("/metrics", s.metricsHandler)
+	fmt.Printf("Metrics route registered\n")
 
 	// WebSocket endpoints - using local handler
 	s.router.GET("/ws", s.optionalAuth(), s.handleWebSocket)
+	fmt.Printf("WebSocket route registered: /ws\n")
 
-	// AI WebSocket proxy endpoint
-	if wsProxyHandler, err := rest.NewAIWSProxyHandler("http://ai-copilot:8003"); err == nil {
-		s.router.GET("/ws/chat", s.optionalAuth(), wsProxyHandler.Proxy)
-	} else {
-		logger.LogError(context.Background(), "Failed to create AI WebSocket proxy handler", map[string]interface{}{
-			"error": err.Error(),
-		})
-	}
+	// AI WebSocket endpoint - handle directly with authentication
+	// Allow OPTIONS method for CORS preflight
+	fmt.Printf("Registering AI WebSocket chat route: /ws/chat\n")
+	s.router.OPTIONS("/ws/chat", func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Authorization, Content-Type")
+		c.Status(http.StatusOK)
+	})
+	s.router.GET("/ws/chat", s.requireAuth(), s.handleAIWebSocket)
+	fmt.Printf("AI WebSocket chat route registered successfully\n")
 
 	// GraphQL endpoints
 	s.setupGraphQLRoutes()
+	fmt.Printf("GraphQL routes registered\n")
 
 	// REST API routes
 	s.setupRESTRoutes()
+	fmt.Printf("REST routes registered\n")
+
+	fmt.Printf("All routes setup completed\n")
 }
 
 // setupGraphQLRoutes sets up GraphQL routes
@@ -593,10 +617,280 @@ server_uptime_seconds %d
 	c.String(http.StatusOK, metrics)
 }
 
+// websocketProxy proxies WebSocket connections to a target server
+type websocketProxy struct {
+	target string
+	headers http.Header
+}
+
+// ServeHTTP handles the WebSocket connection and proxies it to the target server
+func (p *websocketProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
+	// Create a dialer with the same settings as the client
+	dialer := &websocket.Dialer{
+		HandshakeTimeout: 45 * time.Second,
+		ReadBufferSize:   4096,
+		WriteBufferSize:  4096,
+	}
+
+	// Create a new request to the target server
+	targetURL, err := url.Parse(p.target)
+	if err != nil {
+		return fmt.Errorf("invalid target URL: %v", err)
+	}
+
+	// Set up the request headers
+	headers := make(http.Header)
+	
+	// Copy the original headers
+	for k, v := range r.Header {
+		headers[k] = v
+	}
+
+	// Override with any custom headers from the proxy
+	for k, v := range p.headers {
+		headers[k] = v
+	}
+
+	// Set the WebSocket specific headers
+	headers.Set("Connection", "Upgrade")
+	headers.Set("Upgrade", "websocket")
+	headers.Set("Sec-WebSocket-Version", "13")
+
+	// Make sure we have a valid WebSocket key
+	if headers.Get("Sec-WebSocket-Key") == "" {
+		headers.Set("Sec-WebSocket-Key", generateWebSocketKey())
+	}
+
+	// Connect to the target WebSocket server
+	serverConn, resp, err := dialer.Dial(targetURL.String(), headers)
+	if err != nil {
+		if resp != nil {
+			return fmt.Errorf("websocket: bad handshake (status: %d, body: %v)", resp.StatusCode, resp.Body)
+		}
+		return fmt.Errorf("error dialing target server: %v", err)
+	}
+	defer serverConn.Close()
+
+	// Upgrade the client connection
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:   4096,
+		WriteBufferSize:  4096,
+		CheckOrigin:      func(r *http.Request) bool { return true },
+	}
+
+	// Set response headers for WebSocket upgrade
+	headers = make(http.Header)
+	headers.Set("Upgrade", "websocket")
+	headers.Set("Connection", "Upgrade")
+	headers.Set("Sec-WebSocket-Accept", generateWebSocketAccept(r.Header.Get("Sec-WebSocket-Key")))
+
+	// Upgrade the client connection
+	clientConn, err := upgrader.Upgrade(w, r, headers)
+	if err != nil {
+		return fmt.Errorf("error upgrading client connection: %v", err)
+	}
+	defer clientConn.Close()
+
+	// Start proxying messages in both directions
+	errChan := make(chan error, 2)
+
+	// Client to server messages
+	go func() {
+		for {
+			msgType, msg, err := clientConn.ReadMessage()
+			if err != nil {
+				errChan <- fmt.Errorf("error reading from client: %v", err)
+				return
+			}
+			if err := serverConn.WriteMessage(msgType, msg); err != nil {
+				errChan <- fmt.Errorf("error writing to server: %v", err)
+				return
+			}
+		}
+	}()
+
+	// Server to client messages
+	go func() {
+		for {
+			msgType, msg, err := serverConn.ReadMessage()
+			if err != nil {
+				errChan <- fmt.Errorf("error reading from server: %v", err)
+				return
+			}
+			if err := clientConn.WriteMessage(msgType, msg); err != nil {
+				errChan <- fmt.Errorf("error writing to client: %v", err)
+				return
+			}
+		}
+	}()
+
+	// Wait for an error from either goroutine
+	return <-errChan
+}
+
+// generateWebSocketKey generates a random WebSocket key
+func generateWebSocketKey() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+// generateWebSocketAccept generates the WebSocket accept key
+func generateWebSocketAccept(key string) string {
+	h := sha1.New()
+	h.Write([]byte(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
+	return base64.StdEncoding.EncodeToString(h.Sum(nil))
+}
+
 // getWebSocketConnectionCount returns the number of active WebSocket connections
 func (s *Server) getWebSocketConnectionCount() int {
 	if s.wsHandler == nil {
 		return 0
 	}
 	return s.wsHandler.GetConnectionCount()
+}
+
+// handleAIWebSocket handles AI chat WebSocket connections by proxying to the AI service
+func (s *Server) handleAIWebSocket(c *gin.Context) {
+	// Get user ID from authenticated context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// Get user ID as string
+	userIDStr, ok := userID.(string)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID format"})
+		return
+	}
+
+	// Log the AI WebSocket connection attempt
+	s.logger.LogEvent(c.Request.Context(), interfaces.EventLogEntry{
+		Timestamp:     time.Now(),
+		EventID:       "ai_websocket_connect",
+		EventType:     "websocket_connection",
+		UserID:        userIDStr,
+		CorrelationID: c.GetHeader("X-Request-ID"),
+		Source:        "api-gateway",
+		Data: map[string]interface{}{
+			"endpoint": "/ws/chat",
+			"remote_addr": c.Request.RemoteAddr,
+			"user_agent": c.Request.UserAgent(),
+		},
+		Success: true,
+	})
+
+	// Set CORS headers for WebSocket
+	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+	c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Authorization, Content-Type")
+
+	// Handle preflight OPTIONS request
+	if c.Request.Method == "OPTIONS" {
+		c.Status(http.StatusOK)
+		return
+	}
+
+	// Ensure the connection is a WebSocket upgrade request
+	if !c.IsWebsocket() {
+		s.logger.LogError(c.Request.Context(), interfaces.ErrorLogEntry{
+			Timestamp: time.Now(),
+			Level:     "error",
+			Message:   "Not a WebSocket connection",
+			Error:     "Expected WebSocket upgrade request",
+			Service:   "api-gateway",
+			Component: "server",
+		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Expected WebSocket upgrade request"})
+		return
+	}
+
+	// Get the authentication token
+	token := c.GetHeader("Authorization")
+	if token == "" {
+		token = c.Query("token")
+	}
+
+	// Ensure the token has the Bearer prefix
+	if token != "" && !strings.HasPrefix(token, "Bearer ") {
+		token = "Bearer " + strings.TrimSpace(token)
+	}
+
+	// Build the target URL
+	targetURL := fmt.Sprintf("ws://%s:%d/ws/chat", 
+		s.config.WebSocket.ServerHost, 
+		s.config.WebSocket.ServerPort)
+
+	// Log the target URL for debugging
+	s.logger.LogEvent(c.Request.Context(), interfaces.EventLogEntry{
+		Timestamp: time.Now(),
+		EventID:   "ai_websocket_proxy",
+		EventType: "websocket_proxy",
+		UserID:    userIDStr,
+		Source:    "api-gateway",
+		Data: map[string]interface{}{
+			"target_url": targetURL,
+			"has_token":  token != "",
+		},
+		Success: true,
+	})
+
+	// Create a new WebSocket proxy to the AI service
+	proxy := &websocketProxy{
+		target: targetURL,
+		headers: http.Header{
+			"Authorization": {token},
+			"X-Forwarded-For":  {c.Request.RemoteAddr},
+			"X-Forwarded-Host": {c.Request.Host},
+			"X-Forwarded-Proto": {"ws"},
+			"X-Real-IP":        {c.ClientIP()},
+		},
+	}
+
+	// Create a new request with the updated headers
+	req := c.Request.Clone(context.Background())
+	if token != "" {
+		req.Header.Set("Authorization", token)
+	}
+
+	// Copy other necessary headers
+	headersToCopy := []string{"Origin", "User-Agent", "X-Request-ID", "Sec-WebSocket-Key", "Sec-WebSocket-Version", "Sec-WebSocket-Protocol"}
+	for _, h := range headersToCopy {
+		if val := c.GetHeader(h); val != "" {
+			req.Header.Set(h, val)
+		}
+	}
+
+	// Set the request URL to the target URL
+	req.URL, _ = url.Parse(targetURL)
+	req.RequestURI = ""
+
+	// Log the request details
+	s.logger.LogEvent(c.Request.Context(), interfaces.EventLogEntry{
+		Timestamp: time.Now(),
+		EventID:   "websocket_proxy_debug",
+		EventType: "debug",
+		Source:    "api-gateway",
+		Data: map[string]interface{}{
+			"target_url": targetURL,
+			"headers":    req.Header,
+			"message":    "Proxying WebSocket connection",
+		},
+		Success: true,
+	})
+
+	// Serve the WebSocket connection
+	err := proxy.ServeHTTP(c.Writer, req)
+	if err != nil && err != http.ErrServerClosed {
+		s.logger.LogError(c.Request.Context(), interfaces.ErrorLogEntry{
+			Timestamp: time.Now(),
+			Level:     "error",
+			Message:   "WebSocket proxy error",
+			Error:     err.Error(),
+			Service:   "api-gateway",
+			Component: "websocket_proxy",
+		})
+	}
 }

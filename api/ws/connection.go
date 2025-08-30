@@ -449,11 +449,12 @@ func (c *Connection) validateAIMessage(msgData map[string]interface{}) (string, 
 		// Validate model
 		validModels := map[string]bool{
 			"gpt-4": true, "gpt-3.5-turbo": true, "claude-3": true, "claude-3.5": true,
+			"gemini2.0:flash": true, "gemini2.5:pro": true, "gemini": true,
 		}
 		if !validModels[model] {
 			return "", "", "", "", &interfaces.WebSocketError{
 				Code:    interfaces.WSErrorCodeInvalidMessage,
-				Message: "Invalid model. Allowed: gpt-4, gpt-3.5-turbo, claude-3, claude-3.5",
+				Message: "Invalid model. Allowed: gpt-4, gpt-3.5-turbo, claude-3, claude-3.5, gemini2.0:flash, gemini2.5:pro, gemini",
 				Type:    "invalid_model",
 			}
 		}
