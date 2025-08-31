@@ -2,6 +2,7 @@ package rest
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 
@@ -34,8 +35,19 @@ func (h *AIProxyHandler) Chat(c *gin.Context) {
 		return
 	}
 
+	// Parse the request body to ensure model is set to Gemini
+	var requestData map[string]interface{}
+	if err := json.Unmarshal(body, &requestData); err == nil {
+		// If model is not specified, set it to use Gemini
+		if _, exists := requestData["model"]; !exists {
+			requestData["model"] = "gemini2.0:flash"
+			// Update the request body with the modified data
+			body, _ = json.Marshal(requestData)
+		}
+	}
+
 	// Create request to AI service
-	req, err := http.NewRequest("POST", h.aiServiceURL+"/chat", bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", h.aiServiceURL+"/api/v1/chat/", bytes.NewBuffer(body))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to create request to AI service",
@@ -89,9 +101,20 @@ func (h *AIProxyHandler) StreamChat(c *gin.Context) {
 		return
 	}
 
+	// Parse the request body to ensure model is set to Gemini
+	var requestData map[string]interface{}
+	if err := json.Unmarshal(body, &requestData); err == nil {
+		// If model is not specified, set it to use Gemini
+		if _, exists := requestData["model"]; !exists {
+			requestData["model"] = "gemini2.0:flash"
+			// Update the request body with the modified data
+			body, _ = json.Marshal(requestData)
+		}
+	}
+
 	// Create request to AI service
 	// Stream endpoint on AI service
-	req, err := http.NewRequest("POST", h.aiServiceURL+"/chat/stream", bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", h.aiServiceURL+"/api/v1/chat/stream", bytes.NewBuffer(body))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to create request to AI service",
@@ -239,6 +262,17 @@ func (h *AIProxyHandler) Query(c *gin.Context) {
 			"details": err.Error(),
 		})
 		return
+	}
+
+	// Parse the request body to ensure model is set to Gemini
+	var requestData map[string]interface{}
+	if err := json.Unmarshal(body, &requestData); err == nil {
+		// If model is not specified, set it to use Gemini
+		if _, exists := requestData["model"]; !exists {
+			requestData["model"] = "gemini2.0:flash"
+			// Update the request body with the modified data
+			body, _ = json.Marshal(requestData)
+		}
 	}
 
 	// Create request to AI service

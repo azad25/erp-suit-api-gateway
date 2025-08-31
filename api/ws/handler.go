@@ -147,7 +147,9 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) error
 	}
 
 	// Create WebSocket connection wrapper
-	wsConn := NewConnection(conn, userID, h.manager, h.logger, connConfig)
+	// Pass the Handler itself as the ConnectionManager so Connection instances
+	// can type-assert and retrieve the Handler via GetHandler()
+	wsConn := NewConnection(conn, userID, h, h.logger, connConfig)
 
 	// Add connection to manager
 	if err := h.manager.AddConnection(wsConn); err != nil {
@@ -189,21 +191,6 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) error
 	}()
 
 	return nil
-}
-
-// BroadcastToUser broadcasts a message to all connections of a specific user
-func (h *Handler) BroadcastToUser(ctx context.Context, userID string, message []byte) error {
-	return h.manager.BroadcastToUser(ctx, userID, message)
-}
-
-// BroadcastToChannel broadcasts a message to all connections subscribed to a channel
-func (h *Handler) BroadcastToChannel(ctx context.Context, channel string, message []byte) error {
-	return h.manager.BroadcastToChannel(ctx, channel, message)
-}
-
-// GetConnectionCount returns the total number of active connections
-func (h *Handler) GetConnectionCount() int {
-	return h.manager.GetConnectionCount()
 }
 
 // ProcessAIChat processes an AI chat request via WebSocket using gRPC
@@ -300,6 +287,46 @@ func (h *Handler) ProcessAIChatStream(ctx context.Context, userID string, messag
 func (h *Handler) GetHandler() *Handler {
 	return h
 }
+
+// The Handler implements the ConnectionManager interface by delegating to the
+// underlying manager. This allows Connections to receive the Handler as their
+// manager and still use the shared Manager implementation.
+func (h *Handler) AddConnection(conn interfaces.WebSocketConnection) error {
+	return h.manager.AddConnection(conn)
+}
+
+func (h *Handler) RemoveConnection(connectionID string) error {
+	return h.manager.RemoveConnection(connectionID)
+}
+
+func (h *Handler) GetConnection(connectionID string) (interfaces.WebSocketConnection, bool) {
+	return h.manager.GetConnection(connectionID)
+}
+
+func (h *Handler) GetUserConnections(userID string) []interfaces.WebSocketConnection {
+	return h.manager.GetUserConnections(userID)
+}
+
+func (h *Handler) GetChannelConnections(channel string) []interfaces.WebSocketConnection {
+	return h.manager.GetChannelConnections(channel)
+}
+
+func (h *Handler) BroadcastToUser(ctx context.Context, userID string, message []byte) error {
+	return h.manager.BroadcastToUser(ctx, userID, message)
+}
+
+func (h *Handler) BroadcastToChannel(ctx context.Context, channel string, message []byte) error {
+	return h.manager.BroadcastToChannel(ctx, channel, message)
+}
+
+func (h *Handler) GetConnectionCount() int {
+	return h.manager.GetConnectionCount()
+}
+
+func (h *Handler) GetUserCount() int {
+	return h.manager.GetUserCount()
+}
+
 
 // Close closes the WebSocket handler and all connections
 func (h *Handler) Close() error {

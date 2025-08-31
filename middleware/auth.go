@@ -35,26 +35,36 @@ func NewAuthMiddleware(jwtValidator interfaces.JWTValidator, cache interfaces.Ca
 	}
 }
 
-// ValidateJWT is a middleware that validates JWT tokens from the Authorization header
+// extractToken extracts JWT token from Authorization header or query parameter
+func (m *AuthMiddleware) extractToken(c *gin.Context) (string, error) {
+	// First try Authorization header
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" {
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			return "", fmt.Errorf("invalid authorization header format")
+		}
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		if token != "" {
+			return token, nil
+		}
+	}
+
+	// Try query parameter (for WebSocket connections)
+	token := c.Query("token")
+	if token != "" {
+		return token, nil
+	}
+
+	return "", fmt.Errorf("no token provided")
+}
+
+// ValidateJWT is a middleware that validates JWT tokens from the Authorization header or query parameter
 func (m *AuthMiddleware) ValidateJWT() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Extract token from Authorization header
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			m.respondWithError(c, http.StatusUnauthorized, "Authorization header is required", nil)
-			return
-		}
-
-		// Check if it's a Bearer token
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			m.respondWithError(c, http.StatusUnauthorized, "Invalid authorization header format", nil)
-			return
-		}
-
-		// Extract the token
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		if token == "" {
-			m.respondWithError(c, http.StatusUnauthorized, "Token is required", nil)
+		// Extract token from Authorization header or query parameter
+		token, err := m.extractToken(c)
+		if err != nil {
+			m.respondWithError(c, http.StatusUnauthorized, "Authentication token is required", nil)
 			return
 		}
 
@@ -87,25 +97,10 @@ func (m *AuthMiddleware) ValidateJWT() gin.HandlerFunc {
 // OptionalJWT is a middleware that validates JWT tokens if present but doesn't require them
 func (m *AuthMiddleware) OptionalJWT() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Extract token from Authorization header
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
+		// Extract token from Authorization header or query parameter
+		token, err := m.extractToken(c)
+		if err != nil {
 			// No token provided, continue without authentication
-			c.Next()
-			return
-		}
-
-		// Check if it's a Bearer token
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			// Invalid format, continue without authentication
-			c.Next()
-			return
-		}
-
-		// Extract the token
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		if token == "" {
-			// Empty token, continue without authentication
 			c.Next()
 			return
 		}
