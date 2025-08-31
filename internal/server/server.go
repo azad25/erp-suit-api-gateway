@@ -625,83 +625,50 @@ type websocketProxy struct {
 
 // ServeHTTP handles the WebSocket connection and proxies it to the target server
 func (p *websocketProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
-	// Create a context with timeout for the initial handshake
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-
-	// Configure WebSocket upgrader with proper buffer sizes and origin checking
+	// Configure WebSocket upgrader
 	upgrader := websocket.Upgrader{
-		ReadBufferSize:    4096,
-		WriteBufferSize:   4096,
-		EnableCompression: true,
+		ReadBufferSize:  4096,
+		WriteBufferSize: 4096,
 		CheckOrigin: func(r *http.Request) bool {
-			// For production, implement proper origin checking
-			return true
+			return true // Allow all origins for now
 		},
 		HandshakeTimeout: 10 * time.Second,
 	}
 
-	// Add response headers for WebSocket upgrade
-	header := w.Header()
-	header.Set("Upgrade", "websocket")
-	header.Set("Connection", "Upgrade")
-
-	// Upgrade the client connection
+	// Upgrade the client connection to WebSocket
 	clientConn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		return fmt.Errorf("error upgrading client connection: %v", err)
+		return fmt.Errorf("failed to upgrade client connection: %v", err)
 	}
 	defer clientConn.Close()
 
-	// Configure dialer with timeouts and buffer sizes
+	// Configure dialer for backend connection
 	dialer := &websocket.Dialer{
-		HandshakeTimeout:  10 * time.Second,
-		ReadBufferSize:    4096,
-		WriteBufferSize:   4096,
-		EnableCompression: true,
-		Proxy:             http.ProxyFromEnvironment,
+		HandshakeTimeout: 10 * time.Second,
+		ReadBufferSize:   4096,
+		WriteBufferSize:  4096,
 	}
 
-	// Prepare target URL
-	targetURL := p.target
-	if !strings.HasPrefix(targetURL, "ws") && !strings.HasPrefix(targetURL, "wss") {
-		targetURL = "ws://" + targetURL
-	}
-
-	// Prepare headers for the target connection
+	// Prepare headers for backend connection
 	headers := make(http.Header)
-
-	// Copy relevant headers from the original request
-	for _, k := range []string{
-		"Authorization",
-		"X-Request-ID",
-		"X-Forwarded-For",
-		"X-Forwarded-Host",
-		"X-Forwarded-Proto",
-		"X-Real-IP",
-		"User-Agent",
-		"Sec-WebSocket-Protocol",
-	} {
-		if v := r.Header.Get(k); v != "" {
-			headers.Set(k, v)
-		}
+	
+	// Copy essential headers from original request
+	if auth := r.Header.Get("Authorization"); auth != "" {
+		headers.Set("Authorization", auth)
 	}
-
-	// Add any custom headers from the proxy
+	if userAgent := r.Header.Get("User-Agent"); userAgent != "" {
+		headers.Set("User-Agent", userAgent)
+	}
+	
+	// Add custom headers from proxy config
 	for k, v := range p.headers {
 		headers[k] = v
 	}
 
-	// Set WebSocket specific headers
-	headers.Set("Connection", "Upgrade")
-	headers.Set("Upgrade", "websocket")
-	headers.Set("Sec-WebSocket-Version", "13")
-	headers.Set("Origin", "http://"+r.Host)
-
-	// Connect to the target WebSocket server
-	serverConn, resp, dialErr := dialer.DialContext(ctx, targetURL, headers)
-	if dialErr != nil {
-		// Send error message to client before closing
+	// Connect to the backend WebSocket server
+	backendConn, resp, err := dialer.Dial(p.target, headers)
+	if err != nil {
+		// Send error to client and close
 		clientConn.WriteJSON(map[string]interface{}{
 			"type":    "connection_error",
 			"success": false,
@@ -709,13 +676,13 @@ func (p *websocketProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) error
 			"time":    time.Now().UTC().Format(time.RFC3339),
 		})
 		if resp != nil {
-			return fmt.Errorf("error dialing target server (status %d): %v", resp.StatusCode, dialErr)
+			return fmt.Errorf("failed to connect to backend (status %d): %v", resp.StatusCode, err)
 		}
-		return fmt.Errorf("error dialing target server: %v", dialErr)
+		return fmt.Errorf("failed to connect to backend: %v", err)
 	}
-	defer serverConn.Close()
+	defer backendConn.Close()
 
-	// Send connection acknowledgment only after successful backend connection
+	// Start bidirectional message proxying
 	if err := clientConn.WriteJSON(map[string]interface{}{
 		"type":    "connection_ack",
 		"success": true,
@@ -751,7 +718,7 @@ func (p *websocketProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) error
 					return
 				}
 
-				if err := serverConn.WriteMessage(msgType, msg); err != nil {
+				if err := backendConn.WriteMessage(msgType, msg); err != nil {
 					errChan <- fmt.Errorf("error writing to server: %v", err)
 					return
 				}
@@ -768,7 +735,7 @@ func (p *websocketProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) error
 				errChan <- nil
 				return
 			default:
-				msgType, msg, err := serverConn.ReadMessage()
+				msgType, msg, err := backendConn.ReadMessage()
 				if err != nil {
 					if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 						errChan <- fmt.Errorf("error reading from server: %v", err)
@@ -792,19 +759,19 @@ func (p *websocketProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) error
 		// Send close message to both connections
 		closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
 		clientConn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(5*time.Second))
-		serverConn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(5*time.Second))
+		backendConn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(5*time.Second))
 
 		// If the error is a normal closure, return nil
 		if err == nil || websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 			return nil
 		}
 		return err
-	case <-ctx.Done():
+	case <-connCtx.Done():
 		// Context was cancelled (e.g., server shutdown)
 		closeMsg := websocket.FormatCloseMessage(websocket.CloseGoingAway, "Server shutting down")
 		clientConn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(5*time.Second))
-		serverConn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(5*time.Second))
-		return ctx.Err()
+		backendConn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(5*time.Second))
+		return connCtx.Err()
 	}
 }
 
@@ -932,7 +899,7 @@ func (s *Server) handleAIWebSocket(c *gin.Context) {
 	}
 
 	// Build the target URL with token as query parameter
-	targetURL := fmt.Sprintf("%s:%d/ws/chat",
+	targetURL := fmt.Sprintf("ws://%s:%d/chat",
 		s.config.WebSocket.ServerHost,
 		s.config.WebSocket.ServerPort)
 	

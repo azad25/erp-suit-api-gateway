@@ -2,8 +2,10 @@ package rest
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -82,15 +84,35 @@ func (h *AIWSProxyHandler) Proxy(c *gin.Context) {
 	fmt.Printf("Connecting to target: %s\n", targetURL)
 
 	// Connect to the AI Copilot WebSocket service
-	serverConn, _, err := websocket.DefaultDialer.Dial(targetURL, nil)
+	fmt.Printf("Attempting to connect to AI service at: %s\n", targetURL)
+	headers := make(http.Header)
+	headers.Set("X-Forwarded-For", c.ClientIP())
+	headers.Set("X-Real-IP", c.ClientIP())
+	headers.Set("X-Forwarded-Proto", "http")
+	headers.Set("X-Forwarded-Host", c.Request.Host)
+	headers.Set("X-Forwarded-Port", "80")
+
+	dialer := &websocket.Dialer{
+		HandshakeTimeout: 10 * time.Second,
+	}
+
+	serverConn, resp, err := dialer.Dial(targetURL, headers)
 	if err != nil {
-		fmt.Printf("Failed to connect to AI service: %v\n", err)
+		var respBody []byte
+		if resp != nil && resp.Body != nil {
+			respBody, _ = io.ReadAll(resp.Body)
+			resp.Body.Close()
+		}
+		fmt.Printf("Failed to connect to AI service: %v\nResponse: %s\nHeaders: %+v\nBody: %s\n", 
+			err, resp.Status, resp.Header, string(respBody))
 		clientConn.WriteMessage(websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseInternalServerErr,
 				fmt.Sprintf("Failed to connect to AI service: %v", err)))
 		return
 	}
 	defer serverConn.Close()
+
+	fmt.Printf("Successfully connected to AI service at: %s\n", targetURL)
 
 	fmt.Printf("WebSocket proxy connection established successfully\n")
 

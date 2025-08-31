@@ -89,7 +89,7 @@ graphql:
 
 # WebSocket Configuration (Proxies to AI Service)
 websocket:
-  server_host: "localhost"   # Host where AI Copilot service is running
+  server_host: "erp-suite-ai-copilot"  # Host where AI Copilot service is running in Docker network
   server_port: 8003          # AI Copilot service port
   endpoint: "/ws"            # AI Copilot WebSocket endpoint (base path)
   enable_cors: true
