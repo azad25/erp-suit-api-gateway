@@ -1,0 +1,95 @@
+services:
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: ${COMPOSE_PROJECT_NAME:-erp-suite}-api-gateway
+    user: "root"
+    working_dir: /app
+    environment:
+      AIR_WORKDIR: /app
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: ${API_GATEWAY_PORT:-8000}
+      PORT: ${API_GATEWAY_PORT:-8000}
+      SERVER_READ_TIMEOUT: 30s
+      SERVER_WRITE_TIMEOUT: 30s
+      SERVER_SHUTDOWN_TIMEOUT: 10s
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: erp_gateway
+      DATABASE_USER: ${POSTGRES_USER:-postgres}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DATABASE_SSL_MODE: disable
+      DATABASE_MAX_OPEN_CONNS: 10
+      DATABASE_MAX_IDLE_CONNS: 5
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword}
+      REDIS_DB: 1
+      REDIS_POOL_SIZE: 10
+      REDIS_MIN_IDLE_CONNS: 5
+      REDIS_DIAL_TIMEOUT: 5s
+      REDIS_READ_TIMEOUT: 3s
+      REDIS_WRITE_TIMEOUT: 3s
+      KAFKA_BROKERS: kafka:${KAFKA_INTERNAL_PORT:-29092}
+      KAFKA_CLIENT_ID: go-api-gateway
+      KAFKA_RETRY_MAX: 3
+      KAFKA_RETRY_BACKOFF: 100ms
+      KAFKA_FLUSH_MESSAGES: 100
+      KAFKA_FLUSH_BYTES: 1048576
+      KAFKA_FLUSH_TIMEOUT: 1s
+      GRPC_AUTH_SERVICE_HOST: auth-service
+      GRPC_AUTH_SERVICE_PORT: ${AUTH_SERVICE_GRPC_PORT:-50051}
+      GRPC_AUTH_SERVICE_TIMEOUT: 10s
+      GRPC_AUTH_SERVICE_MAX_RETRIES: 3
+      GRPC_AUTH_SERVICE_RETRY_BACKOFF: 100ms
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      JWT_JWKS_URL: http://auth-service:${AUTH_SERVICE_HTTP_PORT:-8080}/api/v1/.well-known/jwks.json
+      JWT_CACHE_TTL: 1h
+      JWT_ALGORITHM: HS256
+      JWT_ISSUER: erp-auth-service
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost,http://erp-frontend:3000
+      CORS_ALLOWED_METHODS: GET,POST,PUT,DELETE,OPTIONS,PATCH
+      CORS_ALLOWED_HEADERS: Authorization,Content-Type,X-Requested-With,Accept,Origin
+      CORS_ALLOW_CREDENTIALS: true
+      CORS_MAX_AGE: 86400
+      WS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost,http://erp-frontend:3000
+      WEBSOCKET_ENDPOINT: /chat
+      WEBSOCKET_SERVER_HOST: ai-copilot
+      WEBSOCKET_SERVER_PORT: 8003
+      WS_ENABLE_COMPRESSION: true
+      WS_READ_BUFFER_SIZE: 1024
+      WS_WRITE_BUFFER_SIZE: 1024
+      LOGGING_LEVEL: ${LOG_LEVEL:-info}
+      LOGGING_FORMAT: json
+      LOGGING_OUTPUT: stdout
+      LOGGING_BUFFER_SIZE: 1000
+      LOGGING_FLUSH_INTERVAL: 5s
+      LOGGING_ELASTICSEARCH_URLS: http://elasticsearch:9200
+      LOGGING_ELASTICSEARCH_INDEX_NAME: go-api-gateway-logs
+      GOGC: 100
+      GOMEMLIMIT: 512MiB
+      ENV: ${NODE_ENV:-development}
+      GO_ENV: ${NODE_ENV:-development}
+    ports:
+      - "${API_GATEWAY_PORT:-8000}:${API_GATEWAY_PORT:-8000}"
+    volumes:
+      - ./:/app
+      - /app/tmp
+      - /app/bin
+      - /app/vendor
+      - /go/pkg/mod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      ai-copilot:
+        condition: service_healthy
+    networks:
+      - erp-network
+    profiles:
+      - full-stack
