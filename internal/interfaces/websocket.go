@@ -49,6 +49,7 @@ type WebSocketMessage struct {
 	Timestamp time.Time              `json:"timestamp"`
 	UserID    string                 `json:"user_id,omitempty"`
 	MessageID string                 `json:"message_id"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // WebSocketMessageType constants

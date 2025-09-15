@@ -252,6 +252,330 @@ func (h *AIProxyHandler) Models(c *gin.Context) {
 	c.Data(resp.StatusCode, "application/json", respBody)
 }
 
+// CreateConversation handles conversation creation by proxying to the AI service
+func (h *AIProxyHandler) CreateConversation(c *gin.Context) {
+	// Read the request body
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Failed to read request body",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Create request to AI service
+	req, err := http.NewRequest("POST", h.aiServiceURL+"/api/v1/chat/conversations", bytes.NewBuffer(body))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create request to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Copy headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "erp-api-gateway")
+	// Forward auth header if present
+	if auth := c.GetHeader("Authorization"); auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+
+	// Make request to AI service
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to connect to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to read AI service response",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Forward response status and body
+	c.Data(resp.StatusCode, "application/json", respBody)
+}
+
+// GetConversations handles getting conversations by proxying to the AI service
+func (h *AIProxyHandler) GetConversations(c *gin.Context) {
+	// Create request to AI service with query parameters
+	req, err := http.NewRequest("GET", h.aiServiceURL+"/api/v1/chat/conversations", nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create request to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Copy query parameters
+	req.URL.RawQuery = c.Request.URL.RawQuery
+
+	// Copy headers
+	req.Header.Set("User-Agent", "erp-api-gateway")
+	// Forward auth header if present
+	if auth := c.GetHeader("Authorization"); auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+
+	// Make request to AI service
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to connect to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to read AI service response",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Forward response status and body
+	c.Data(resp.StatusCode, "application/json", respBody)
+}
+
+// GetConversation handles getting a specific conversation by proxying to the AI service
+func (h *AIProxyHandler) GetConversation(c *gin.Context) {
+	conversationID := c.Param("id")
+	if conversationID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "conversation ID is required",
+		})
+		return
+	}
+
+	// Create request to AI service
+	req, err := http.NewRequest("GET", h.aiServiceURL+"/api/v1/chat/conversations/"+conversationID, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create request to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Copy headers
+	req.Header.Set("User-Agent", "erp-api-gateway")
+	// Forward auth header if present
+	if auth := c.GetHeader("Authorization"); auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+
+	// Make request to AI service
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to connect to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to read AI service response",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Forward response status and body
+	c.Data(resp.StatusCode, "application/json", respBody)
+}
+
+// UpdateConversation handles updating a conversation by proxying to the AI service
+func (h *AIProxyHandler) UpdateConversation(c *gin.Context) {
+	conversationID := c.Param("id")
+	if conversationID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "conversation ID is required",
+		})
+		return
+	}
+
+	// Read the request body
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Failed to read request body",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Create request to AI service
+	req, err := http.NewRequest("PUT", h.aiServiceURL+"/api/v1/chat/conversations/"+conversationID, bytes.NewBuffer(body))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create request to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Copy headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "erp-api-gateway")
+	// Forward auth header if present
+	if auth := c.GetHeader("Authorization"); auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+
+	// Make request to AI service
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to connect to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to read AI service response",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Forward response status and body
+	c.Data(resp.StatusCode, "application/json", respBody)
+}
+
+// DeleteConversation handles deleting a conversation by proxying to the AI service
+func (h *AIProxyHandler) DeleteConversation(c *gin.Context) {
+	conversationID := c.Param("id")
+	if conversationID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "conversation ID is required",
+		})
+		return
+	}
+
+	// Create request to AI service
+	req, err := http.NewRequest("DELETE", h.aiServiceURL+"/api/v1/chat/conversations/"+conversationID, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create request to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Copy headers
+	req.Header.Set("User-Agent", "erp-api-gateway")
+	// Forward auth header if present
+	if auth := c.GetHeader("Authorization"); auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+
+	// Make request to AI service
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to connect to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to read AI service response",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Forward response status and body
+	c.Data(resp.StatusCode, "application/json", respBody)
+}
+
+// GetConversationMessages handles getting conversation messages by proxying to the AI service
+func (h *AIProxyHandler) GetConversationMessages(c *gin.Context) {
+	conversationID := c.Param("id")
+	if conversationID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "conversation ID is required",
+		})
+		return
+	}
+
+	// Create request to AI service with query parameters
+	req, err := http.NewRequest("GET", h.aiServiceURL+"/api/v1/chat/conversations/"+conversationID+"/messages", nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create request to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Copy query parameters
+	req.URL.RawQuery = c.Request.URL.RawQuery
+
+	// Copy headers
+	req.Header.Set("User-Agent", "erp-api-gateway")
+	// Forward auth header if present
+	if auth := c.GetHeader("Authorization"); auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+
+	// Make request to AI service
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to connect to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to read AI service response",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Forward response status and body
+	c.Data(resp.StatusCode, "application/json", respBody)
+}
+
 // Query handles AI query requests by proxying to the AI service
 func (h *AIProxyHandler) Query(c *gin.Context) {
 	// Read the request body

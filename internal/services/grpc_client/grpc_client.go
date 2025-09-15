@@ -389,3 +389,7 @@ func (c *GRPCClient) AICopilotService(ctx context.Context) (aipb.AICopilotServic
 func (c *GRPCClient) GetServiceDiscovery() ServiceDiscovery {
 	return c.serviceDiscovery
 }
+// GetConfig returns the gRPC client configuration
+func (c *GRPCClient) GetConfig() *config.GRPCConfig {
+	return c.config
+}

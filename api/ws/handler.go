@@ -194,7 +194,7 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) error
 }
 
 // ProcessAIChat processes an AI chat request via WebSocket using gRPC
-func (h *Handler) ProcessAIChat(ctx context.Context, userID string, message string, conversationID string, agentType string, model string) (*aipb.ChatResponse, error) {
+func (h *Handler) ProcessAIChat(ctx context.Context, userID string, message string, conversationID string, agentType string, model string, metadata map[string]interface{}) (*aipb.ChatResponse, error) {
 	// Get AI Copilot gRPC client
 	aiClient, err := h.grpcClient.AICopilotService(ctx)
 	if err != nil {
@@ -216,6 +216,48 @@ func (h *Handler) ProcessAIChat(ctx context.Context, userID string, message stri
 		MaxTokens:      1000,
 	}
 
+	// Add metadata to context if available
+	if metadata != nil && len(metadata) > 0 {
+		// Convert metadata to JSON string and add to context
+		metadataJSON, err := json.Marshal(metadata)
+		if err == nil {
+			req.Context = string(metadataJSON)
+		} else {
+			h.logger.LogWarning(ctx, "Failed to marshal metadata to JSON", map[string]interface{}{
+				"user_id": userID,
+				"error":   err.Error(),
+			})
+		}
+	}
+
+	// Add metadata to context if available
+	if metadata != nil && len(metadata) > 0 {
+		// Convert metadata to JSON string and add to context
+		metadataJSON, err := json.Marshal(metadata)
+		if err == nil {
+			req.Context = string(metadataJSON)
+		} else {
+			h.logger.LogWarning(ctx, "Failed to marshal metadata to JSON", map[string]interface{}{
+				"user_id": userID,
+				"error":   err.Error(),
+			})
+		}
+	}
+
+	// Add metadata to context if available
+	if metadata != nil && len(metadata) > 0 {
+		// Convert metadata to JSON string and add to context
+		metadataJSON, err := json.Marshal(metadata)
+		if err == nil {
+			req.Context = string(metadataJSON)
+		} else {
+			h.logger.LogWarning(ctx, "Failed to marshal metadata to JSON", map[string]interface{}{
+				"user_id": userID,
+				"error":   err.Error(),
+			})
+		}
+	}
+
 	// Make gRPC call to AI service
 	resp, err := aiClient.Chat(ctx, req)
 	if err != nil {
@@ -230,7 +272,7 @@ func (h *Handler) ProcessAIChat(ctx context.Context, userID string, message stri
 }
 
 // ProcessAIChatStream processes a streaming AI chat request via WebSocket using gRPC
-func (h *Handler) ProcessAIChatStream(ctx context.Context, userID string, message string, conversationID string, agentType string, model string) (<-chan *aipb.ChatResponse, error) {
+func (h *Handler) ProcessAIChatStream(ctx context.Context, userID string, message string, conversationID string, agentType string, model string, metadata map[string]interface{}) (<-chan *aipb.ChatResponse, error) {
 	// Get AI Copilot gRPC client
 	aiClient, err := h.grpcClient.AICopilotService(ctx)
 	if err != nil {

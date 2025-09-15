@@ -1,8 +1,10 @@
 package rest
 
 import (
+	"erp-api-gateway/internal/config"
 	"erp-api-gateway/internal/interfaces"
 	"erp-api-gateway/internal/services/grpc_client"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,6 +15,7 @@ type RouterConfig struct {
 	CacheService   interfaces.CacheService
 	EventPublisher interfaces.EventPublisher
 	Logger         interfaces.SimpleLogger
+	Config         *config.Config // Add the main configuration
 }
 
 // SetupAuthRoutes sets up authentication-related routes
@@ -43,7 +46,10 @@ func SetupAuthRoutes(router *gin.Engine, config *RouterConfig) {
 // SetupAIRoutes sets up AI Copilot related routes
 func SetupAIRoutes(router gin.IRouter, config *RouterConfig) {
 	// Create AI proxy handler (communicates with AI service via HTTP)
-	aiProxyHandler := NewAIProxyHandler("http://ai-copilot:8003")
+	// The AI service URL should be provided in the config
+	aiServiceURL := "http://" + config.Config.GRPC.AICopilotService.Host + ":" + 
+		strconv.Itoa(int(config.Config.WebSocket.ServerPort))
+	aiProxyHandler := NewAIProxyHandler(aiServiceURL)
 
 	// Note: WebSocket proxy route should be registered at root level, not here
 
@@ -64,6 +70,18 @@ func SetupAIRoutes(router gin.IRouter, config *RouterConfig) {
 
 		// Query endpoint
 		aiGroup.POST("/query", aiProxyHandler.Query)
+	}
+
+	// Create AI chat route group for conversation management
+	chatGroup := router.Group("/ai/chat")
+	{
+		// Conversation management endpoints
+		chatGroup.POST("/conversations", aiProxyHandler.CreateConversation)
+		chatGroup.GET("/conversations", aiProxyHandler.GetConversations)
+		chatGroup.GET("/conversations/:id", aiProxyHandler.GetConversation)
+		chatGroup.PUT("/conversations/:id", aiProxyHandler.UpdateConversation)
+		chatGroup.DELETE("/conversations/:id", aiProxyHandler.DeleteConversation)
+		chatGroup.GET("/conversations/:id/messages", aiProxyHandler.GetConversationMessages)
 	}
 }
 

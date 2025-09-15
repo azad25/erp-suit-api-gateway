@@ -316,6 +316,7 @@ func (s *Server) setupRESTRoutes() {
 		CacheService:   s.redisClient,
 		EventPublisher: s.eventPublisher,
 		Logger:         logging.NewSimpleLogger(s.logger),
+		Config:         s.config,
 	}
 
 	// Authentication routes (no auth required for login/register)
@@ -367,7 +368,9 @@ func (s *Server) getRESTAuthHandler(config *rest.RouterConfig) *rest.AuthHandler
 
 // getRESTAIHandler creates and returns a REST AI proxy handler
 func (s *Server) getRESTAIHandler(config *rest.RouterConfig) *rest.AIProxyHandler {
-	return rest.NewAIProxyHandler("http://ai-copilot:8003")
+	// Use the AI Copilot service address from the configuration
+	aiServiceURL := fmt.Sprintf("http://%s:%d", s.config.GRPC.AICopilotService.Host, s.config.WebSocket.ServerPort)
+	return rest.NewAIProxyHandler(aiServiceURL)
 }
 
 // Middleware helper functions

@@ -515,6 +515,9 @@ func (c *Connection) handleAIChat(ctx context.Context, msg interfaces.WebSocketM
 	conversationID = validatedConversationID
 	agentType = validatedAgentType
 	model = validatedModel
+	
+	// Pass metadata if available
+	metadata := msg.Metadata
 
 	// Rate limiting check (basic implementation)
 	if err := c.checkRateLimit(c.userID); err != nil {
@@ -526,7 +529,7 @@ func (c *Connection) handleAIChat(ctx context.Context, msg interfaces.WebSocketM
 	}
 
 	// Process AI chat request
-	response, err := handler.ProcessAIChat(ctx, c.userID, message, conversationID, agentType, model)
+	response, err := handler.ProcessAIChat(ctx, c.userID, message, conversationID, agentType, model, metadata)
 	if err != nil {
 		// Provide more detailed error information
 		var errorType string
@@ -676,8 +679,11 @@ func (c *Connection) handleAIStream(ctx context.Context, msg interfaces.WebSocke
 			}
 	}
 
+	// Pass metadata if available
+	metadata := msg.Metadata
+
 	// Process streaming AI chat request
-	responseChan, err := handler.ProcessAIChatStream(ctx, c.userID, message, conversationID, agentType, model)
+	responseChan, err := handler.ProcessAIChatStream(ctx, c.userID, message, conversationID, agentType, model, metadata)
 	if err != nil {
 		// Provide more detailed error information
 		var errorType string
