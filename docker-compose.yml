@@ -49,12 +49,12 @@ services:
       JWT_CACHE_TTL: 1h
       JWT_ALGORITHM: HS256
       JWT_ISSUER: erp-auth-service
-      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost,http://erp-frontend:3000
+      CORS_ALLOWED_ORIGINS: "*"
       CORS_ALLOWED_METHODS: GET,POST,PUT,DELETE,OPTIONS,PATCH
       CORS_ALLOWED_HEADERS: Authorization,Content-Type,X-Requested-With,Accept,Origin
       CORS_ALLOW_CREDENTIALS: true
       CORS_MAX_AGE: 86400
-      WS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost,http://erp-frontend:3000
+      WS_ALLOWED_ORIGINS: "*"
       WEBSOCKET_ENDPOINT: /chat
       WEBSOCKET_SERVER_HOST: ai-copilot
       WEBSOCKET_SERVER_PORT: 8003

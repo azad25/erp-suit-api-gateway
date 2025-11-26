@@ -9,10 +9,7 @@ server:
   shutdown_timeout: "10s"
   cors:
     allowed_origins:
-      - "http://localhost:3000"
-      - "http://127.0.0.1:3000"
-      - "http://localhost"
-      - "http://erp-frontend:3000"
+      - "*"
     allowed_methods:
       - "GET"
       - "POST"
@@ -26,7 +23,7 @@ server:
       - "X-Requested-With"
       - "Accept"
       - "Origin"
-    allow_credentials: true
+    allow_credentials: false
     max_age: 86400
 
 database:
@@ -104,10 +101,7 @@ websocket:
   max_message_size: 1048576  # 1MB
   max_connections: 10000
   allowed_origins:
-    - "http://localhost:3000"
-    - "http://127.0.0.1:3000"
-    - "http://localhost"
-    - "http://erp-frontend:3000"
+    - "*"
   enable_compression: false
   compression_level: 0
 
