@@ -83,6 +83,18 @@ func SetupAIRoutes(router gin.IRouter, config *RouterConfig) {
 		chatGroup.DELETE("/conversations/:id", aiProxyHandler.DeleteConversation)
 		chatGroup.GET("/conversations/:id/messages", aiProxyHandler.GetConversationMessages)
 	}
+
+	// Create LLM settings route group for provider management
+	llmSettingsGroup := router.Group("/ai/llm-settings")
+	{
+		// Provider management endpoints
+		llmSettingsGroup.GET("/providers", aiProxyHandler.GetLLMProviders)
+		llmSettingsGroup.GET("/providers/status", aiProxyHandler.GetLLMProvidersStatus)
+		llmSettingsGroup.POST("/providers", aiProxyHandler.CreateLLMProvider)
+		llmSettingsGroup.PUT("/providers/:id", aiProxyHandler.UpdateLLMProvider)
+		llmSettingsGroup.DELETE("/providers/:id", aiProxyHandler.DeleteLLMProvider)
+		llmSettingsGroup.POST("/providers/:id/test", aiProxyHandler.TestLLMProvider)
+	}
 }
 
 // SetupAllRoutes sets up all REST API routes

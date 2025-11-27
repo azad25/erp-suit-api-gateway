@@ -641,3 +641,128 @@ func (h *AIProxyHandler) Query(c *gin.Context) {
 	// Forward response status and body
 	c.Data(resp.StatusCode, "application/json", respBody)
 }
+
+// GetLLMProviders handles getting all LLM providers by proxying to the AI service
+func (h *AIProxyHandler) GetLLMProviders(c *gin.Context) {
+	h.proxyRequest(c, "GET", "/api/llm-settings/providers", nil)
+}
+
+// GetLLMProvidersStatus handles getting LLM providers status by proxying to the AI service
+func (h *AIProxyHandler) GetLLMProvidersStatus(c *gin.Context) {
+	h.proxyRequest(c, "GET", "/api/llm-settings/providers/status", nil)
+}
+
+// CreateLLMProvider handles creating a new LLM provider by proxying to the AI service
+func (h *AIProxyHandler) CreateLLMProvider(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Failed to read request body",
+			"details": err.Error(),
+		})
+		return
+	}
+	h.proxyRequest(c, "POST", "/api/llm-settings/providers", body)
+}
+
+// UpdateLLMProvider handles updating an LLM provider by proxying to the AI service
+func (h *AIProxyHandler) UpdateLLMProvider(c *gin.Context) {
+	providerID := c.Param("id")
+	if providerID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "provider ID is required",
+		})
+		return
+	}
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Failed to read request body",
+			"details": err.Error(),
+		})
+		return
+	}
+	h.proxyRequest(c, "PUT", "/api/llm-settings/providers/"+providerID, body)
+}
+
+// DeleteLLMProvider handles deleting an LLM provider by proxying to the AI service
+func (h *AIProxyHandler) DeleteLLMProvider(c *gin.Context) {
+	providerID := c.Param("id")
+	if providerID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "provider ID is required",
+		})
+		return
+	}
+	h.proxyRequest(c, "DELETE", "/api/llm-settings/providers/"+providerID, nil)
+}
+
+// TestLLMProvider handles testing an LLM provider by proxying to the AI service
+func (h *AIProxyHandler) TestLLMProvider(c *gin.Context) {
+	providerID := c.Param("id")
+	if providerID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "provider ID is required",
+		})
+		return
+	}
+	h.proxyRequest(c, "POST", "/api/llm-settings/providers/"+providerID+"/test", nil)
+}
+
+// proxyRequest is a helper function to proxy requests to the AI service
+func (h *AIProxyHandler) proxyRequest(c *gin.Context, method, path string, body []byte) {
+	// Create request to AI service
+	var req *http.Request
+	var err error
+
+	if body != nil {
+		req, err = http.NewRequest(method, h.aiServiceURL+path, bytes.NewBuffer(body))
+	} else {
+		req, err = http.NewRequest(method, h.aiServiceURL+path, nil)
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create request to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Copy query parameters
+	req.URL.RawQuery = c.Request.URL.RawQuery
+
+	// Copy headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "erp-api-gateway")
+	
+	// Forward auth header if present
+	if auth := c.GetHeader("Authorization"); auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+
+	// Make request to AI service
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to connect to AI service",
+			"details": err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to read AI service response",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Forward response status and body
+	c.Data(resp.StatusCode, "application/json", respBody)
+}
